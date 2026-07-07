@@ -530,7 +530,9 @@ function stripStarWord(part) {
 }
 
 function parseQuickInput(raw) {
-  let s = raw.trim().replace(/\s*\b(slash|barre oblique|barre)\b\s*/gi, ' / ');
+  // "slash" est souvent mal transcrit par la dictée téléphone (ex: "flash") : on
+  // tolère les variantes les plus fréquentes en plus du mot lui-même.
+  let s = raw.trim().replace(/\s*\b(slash|flash|barre oblique|barre)\b\s*/gi, ' / ');
   const rawParts = s.split('/').map(p => p.trim());
 
   let star = false;
