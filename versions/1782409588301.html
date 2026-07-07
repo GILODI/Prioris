@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Todolist Camp",
+  "schemaVersion": 1,
+  "description": "Todolist interactive C.A.M.P. avec zones 0/1/2/3, cases à cocher et ajout de tâches",
+  "mcpTools": [],
+  "mcpServerNames": []
+}
+</script>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Todolist Communication</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #f4f6fa; color: #1a1a2e; padding: 16px; font-size: 14px; }
+h1 { font-size: 17px; font-weight: 700; color: #1F3864; margin-bottom: 2px; }
+.subtitle { font-size: 11px; color: #999; margin-bottom: 14px; }
+.zone { margin-bottom: 14px; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; background: #fff; }
+.zone-header { display: flex; align-items: center; gap: 8px; padding: 9px 13px; font-size: 13px; font-weight: 700; cursor: pointer; user-select: none; }
+.zone-header .count { margin-left: auto; font-size: 11px; font-weight: 400; background: rgba(0,0,0,0.09); border-radius: 20px; padding: 2px 8px; }
+.zone-0 .zone-header { background: #ffe0e0; color: #b00020; }
+.zone-1 .zone-header { background: #ffeacc; color: #8a4000; }
+.zone-2 .zone-header { background: #fffacc; color: #7a6000; }
+.zone-3 .zone-header { background: #e8f5e9; color: #1b5e20; }
+.zone-u .zone-header { background: #eeeeee; color: #555; }
+.zone-done-all .zone-header { background: #e8eaf6; color: #3949ab; }
+.task { display: flex; align-items: flex-start; gap: 10px; padding: 8px 13px; border-top: 0.5px solid #f0f0f0; }
+.task:hover { background: #fafbfd; }
+.task-body { flex: 1; min-width: 0; }
+.task-contact { font-size: 11px; font-weight: 700; color: #1F3864; }
+.task-text { font-size: 12px; color: #333; line-height: 1.4; }
+.task-text em { color: #bbb; font-style: normal; }
+.check { width: 17px; height: 17px; min-width: 17px; border: 1.5px solid #ccc; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-top: 2px; flex-shrink: 0; }
+.check.on { background: #1F3864; border-color: #1F3864; }
+.check.on::after { content: '✓'; color: #fff; font-size: 10px; font-weight: 800; }
+.prio-sel { font-size: 11px; border: 1px solid #ddd; border-radius: 5px; padding: 3px 4px; color: #444; background: #fafafa; cursor: pointer; align-self: center; flex-shrink: 0; }
+.edit-btn { font-size: 13px; color: #bbb; cursor: pointer; padding: 0 3px; align-self: center; line-height: 1; visibility: hidden; flex-shrink: 0; }
+.del-btn { font-size: 16px; color: #ddd; cursor: pointer; padding: 0 3px; align-self: center; line-height: 1; visibility: hidden; flex-shrink: 0; }
+.task:hover .del-btn, .task:hover .edit-btn { visibility: visible; }
+.del-btn:hover { color: #e53935; }
+.edit-btn:hover { color: #1F3864; }
+.task.done-task .task-contact, .task.done-task .task-text { text-decoration: line-through; opacity: 0.45; }
+.add-bar { display: flex; gap: 6px; padding: 8px 13px; border-top: 1px solid #f0f0f0; background: #fafafa; }
+.add-bar input { font-size: 12px; border: 1px solid #ddd; border-radius: 6px; padding: 5px 8px; color: #222; background: #fff; }
+.add-bar input:focus { outline: none; border-color: #1F3864; }
+.inp-contact { width: 120px; }
+.inp-action { flex: 1; }
+.add-btn { font-size: 12px; background: #1F3864; color: #fff; border: none; border-radius: 6px; padding: 5px 12px; cursor: pointer; white-space: nowrap; }
+.add-btn:hover { background: #2e5c8a; }
+.done-section { border-top: 0.5px solid #f0f0f0; }
+.done-toggle { font-size: 11px; color: #888; padding: 7px 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.done-toggle:hover { color: #555; }
+.done-toggle .dchev { font-size: 10px; transition: transform 0.2s; }
+.done-toggle .dchev.open { transform: rotate(90deg); }
+.done-list { display: none; }
+.done-list.visible { display: block; }
+.done-footer { display: flex; align-items: center; justify-content: flex-end; padding: 5px 13px; border-top: 0.5px solid #f0f0f0; }
+.clear-btn { font-size: 11px; color: #e53935; cursor: pointer; }
+.clear-btn:hover { text-decoration: underline; }
+.empty-msg { padding: 8px 13px; font-size: 11px; color: #bbb; border-top: 0.5px solid #f0f0f0; }
+.chevron { transition: transform 0.2s; font-size: 11px; margin-left: 2px; }
+.collapsed .task-list, .collapsed .add-bar, .collapsed .done-section { display: none; }
+.collapsed .chevron { transform: rotate(-90deg); }
+.edit-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.edit-modal { background: #fff; border-radius: 12px; padding: 20px; width: 320px; box-shadow: 0 4px 24px rgba(0,0,0,0.15); }
+.edit-modal h3 { font-size: 13px; font-weight: 700; color: #1F3864; margin-bottom: 12px; }
+.edit-modal label { font-size: 11px; color: #666; display: block; margin-bottom: 3px; margin-top: 10px; }
+.edit-modal input { width: 100%; font-size: 13px; border: 1px solid #ddd; border-radius: 6px; padding: 7px 9px; color: #222; }
+.edit-modal input:focus { outline: none; border-color: #1F3864; }
+.edit-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+.btn-cancel { font-size: 12px; background: #f0f0f0; color: #555; border: none; border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+.btn-save { font-size: 12px; background: #1F3864; color: #fff; border: none; border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>Todolist Communication</h1>
+<p class="subtitle">Mise à jour 25/06/2026 · ✎ pour modifier · × pour supprimer · change le chiffre pour déplacer</p>
+<div id="app"></div>
+<div id="edit-overlay" style="display:none"></div>
+<script>
+const KEY = 'camp_todo_v5';
+const ZONES = [
+  { id: 0, label: '🔴  0 — Urgence absolue', cls: 'zone-0' },
+  { id: 1, label: '🟠  1 — Urgent', cls: 'zone-1' },
+  { id: 2, label: '🟡  2 — Cette semaine', cls: 'zone-2' },
+  { id: 3, label: '🟢  3 — File d\'attente', cls: 'zone-3' },
+  { id: null, label: '—  À classer', cls: 'zone-u' },
+];
+const DEFAULTS = [
+  {id:1,p:0,c:'Arnaud',t:'Relancer offre de rentrée',done:false},
+  {id:2,p:0,c:'Janja',t:'Commander poster',done:false},
+  {id:3,p:0,c:'Stéphane / 0-3000',t:'Synchro offre fac',done:false},
+  {id:4,p:null,c:'Clément',t:'Répondre — prime',done:false},
+  {id:5,p:null,c:'Léo / Iloé',t:'Prime',done:false},
+  {id:6,p:null,c:'Pellissier + GS',t:'Planning',done:false},
+  {id:7,p:null,c:'Eliana + Simon',t:'Shooting — proposition photographe',done:false},
+  {id:8,p:null,c:'Laura (photographe)',t:'Télécharger fichier + préparer com semaine pro',done:false},
+  {id:9,p:null,c:'Arnaud',t:'Gris XL (longe / baudrier)',done:false},
+  {id:10,p:null,c:'Italie — Sam + Manu',t:'Demande équipement',done:false},
+  {id:11,p:null,c:'Tom Locquet',t:'',done:false},
+  {id:12,p:null,c:'Lily Rault',t:'',done:false},
+  {id:13,p:null,c:'Fabien x3 / Gabo x14 / Ninon x1',t:'Envoyer sac magnésie Gamma',done:false},
+  {id:14,p:null,c:'Gabo',t:'Veste L',done:false},
+  {id:15,p:null,c:'Loric',t:'Rappeler — 06 71 66 37 32',done:false},
+  {id:16,p:null,c:'Arthur',t:'Facture',done:false},
+  {id:17,p:null,c:'Arnaud',t:'Dotation : Grey L + longe + Escape',done:false},
+  {id:18,p:null,c:'Guillaume',t:'Devis',done:false},
+  {id:19,p:null,c:'Intersport',t:'Photos + récap + lots + répondre mail',done:false},
+  {id:20,p:null,c:'Xlight',t:'Rediriger vers Intersport',done:false},
+  {id:21,p:null,c:'Simon',t:"Envoyer proposition à l'Italie",done:false},
+  {id:22,p:null,c:'Pomblière',t:'Appeler la mairie',done:false},
+  {id:23,p:null,c:'Suzanne',t:'Prévenir que docs juillet sont prêts',done:false},
+  {id:24,p:null,c:'Alban / Climbing District',t:'Décider District Partner (5 000 EUR)',done:false},
+  {id:25,p:null,c:'Alexandra Billot / Les Others',t:'Fixer échange + faire évoluer partenariat',done:false},
+  {id:26,p:null,c:'Alltricks / Bixente',t:'Plan marketing 2026',done:false},
+  {id:27,p:null,c:'Gaetan / Croque-montagne',t:'Proposer offre estivale',done:false},
+  {id:28,p:null,c:'Space Bloc / Maeva',t:'Juillet + proposer dates',done:false},
+  {id:29,p:null,c:'Rachid + Anne',t:'T-shirt L',done:false},
+  {id:30,p:null,c:'Pierre Pujol / Ligue Occitanie',t:'',done:false},
+  {id:31,p:null,c:'Clément Outzer',t:'Test 750 EUR',done:false},
+  {id:32,p:null,c:'Mairie de Poulières',t:'Contest dry',done:false},
+  {id:33,p:null,c:'Sophia',t:'Répondre',done:false},
+  {id:34,p:null,c:'',t:'Visuel fléchette',done:false},
+  {id:35,p:null,c:'',t:'Publicad Championnat',done:false},
+  {id:36,p:null,c:'Arthur',t:'Annuler publicad',done:false},
+  {id:37,p:null,c:'',t:'Envoyer planning vidéo',done:false},
+  {id:38,p:null,c:'',t:'Planning collectif en ligne (équipe)',done:false},
+  {id:39,p:null,c:'',t:'Forex events (40 & 80 cm)',done:false},
+  {id:40,p:null,c:'Stéphane',t:'Safety Shred Days 2026',done:false},
+  {id:41,p:null,c:'Stéphane',t:'LUNDI 30/06 — Relancer : Tente WC + côtes x4',done:false},
+  {id:42,p:null,c:'Arthur',t:'Photos pour publication (HQ)',done:false},
+  {id:43,p:null,c:'Adrien + Didier',t:'Carte de visite numérique',done:false},
+  {id:44,p:null,c:'Banque',t:'',done:false},
+  {id:45,p:null,c:'TBS',t:'',done:false},
+  {id:46,p:null,c:'Mélanie / Descolage',t:'Offre de rentrée',done:false},
+  {id:47,p:null,c:'Hélène Fournier',t:'Envoyer contact guide — 06.36.08.08.88',done:false},
+  {id:48,p:null,c:'Pic du Midi / Guides du Midi',t:'Rédiger contrat',done:false},
+  {id:49,p:null,c:'Antonin Forest',t:'T-shirt',done:false},
+  {id:50,p:null,c:'Sylvio / Magazine',t:'Répondre skimo 26/27 + test casques',done:false},
+  {id:51,p:null,c:'Charles Loury / PlanetGrimpe',t:'Projet vidéo Camille',done:false},
+  {id:52,p:null,c:'Benjamin Livache / Editions',t:'Présentation nouveautés',done:false},
+  {id:53,p:null,c:'Thomas Loisel / Outdoor Expert',t:'Recontacter',done:false},
+  {id:54,p:null,c:'Gabrielle / Speck Sports',t:'En attente : proposition compensation',done:false},
+  {id:55,p:null,c:'Claire Leraistre',t:'En attente : retour',done:false},
+  {id:56,p:null,c:'Jeremy / Bureau guides Annecy',t:'En attente : voir pour les sangles',done:false},
+  {id:57,p:null,c:'Christian',t:'Logo — statut à préciser',done:false},
+  {id:58,p:null,c:'Track Sport',t:"Modifier l'offre — à préciser",done:false},
+];
+
+let nid = 200;
+let doneOpen = {};
+
+function loadState() {
+  try { const s = localStorage.getItem(KEY); if(s) return JSON.parse(s); } catch(e){}
+  return { tasks: JSON.parse(JSON.stringify(DEFAULTS)), col: {}, doneOpen: {} };
+}
+let st = loadState();
+let tasks = st.tasks;
+let col = st.col || {};
+doneOpen = st.doneOpen || {};
+
+function persist() { localStorage.setItem(KEY, JSON.stringify({tasks, col, doneOpen})); }
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function tHtml(t, isDone) {
+  const opts = `<option value="">—</option>${[0,1,2,3].map(p=>`<option value="${p}"${t.p===p?' selected':''}>${p}</option>`).join('')}`;
+  const contact = t.c ? `<div class="task-contact">${esc(t.c)}</div>` : '';
+  const text = t.t ? `<div class="task-text">${esc(t.t)}</div>` : `<div class="task-text"><em>—</em></div>`;
+  const doneClass = isDone ? ' done-task' : '';
+  return `<div class="task${doneClass}" id="task-${t.id}">
+    <div class="check${isDone?' on':''}" onclick="togDone(${t.id})"></div>
+    <div class="task-body">${contact}${text}</div>
+    <select class="prio-sel" onchange="chPrio(${t.id},this.value)">${opts}</select>
+    <span class="edit-btn" onclick="openEdit(${t.id})" title="Modifier">✎</span>
+    <span class="del-btn" onclick="delT(${t.id})" title="Supprimer">×</span>
+  </div>`;
+}
+
+function render() {
+  let html = '';
+  ZONES.forEach(z => {
+    const active = tasks.filter(t => t.p === z.id && !t.done);
+    const done = tasks.filter(t => t.p === z.id && t.done);
+    const zkey = String(z.id);
+    const isCol = col[zkey];
+    const isDoneOpen = doneOpen[zkey];
+    html += `<div class="zone ${z.cls}${isCol?' collapsed':''}">`;
+    html += `<div class="zone-header" onclick="toggleCol('${zkey}')">
+      <span>${z.label}</span>
+      <span class="count">${active.length} à faire</span>
+      <span class="chevron">▾</span>
+    </div>`;
+    html += `<div class="task-list">`;
+    if (!active.length) html += `<div class="empty-msg">Aucune tâche</div>`;
+    active.forEach(t => { html += tHtml(t, false); });
+    html += `</div>`;
+    const zid = z.id === null ? 'null' : z.id;
+    html += `<div class="add-bar">
+      <input class="inp-contact" type="text" placeholder="Contact" id="c-${zid}">
+      <input class="inp-action" type="text" placeholder="Action..." id="a-${zid}" onkeydown="if(event.key==='Enter')addT('${zid}')">
+      <button class="add-btn" onclick="addT('${zid}')">+ Ajouter</button>
+    </div>`;
+    if (done.length) {
+      html += `<div class="done-section">
+        <div class="done-toggle" onclick="toggleDoneOpen('${zkey}')">
+          <span class="dchev${isDoneOpen?' open':''}">▶</span>
+          <span>${done.length} tâche${done.length>1?'s':''} terminée${done.length>1?'s':''}</span>
+        </div>
+        <div class="done-list${isDoneOpen?' visible':''}">
+          ${done.map(t => tHtml(t, true)).join('')}
+          <div class="done-footer"><span class="clear-btn" onclick="clearDone('${zid}')">Effacer l'historique</span></div>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  });
+  document.getElementById('app').innerHTML = html;
+}
+
+function togDone(id) {
+  tasks = tasks.map(t => t.id===id ? {...t, done:!t.done} : t);
+  persist(); render();
+}
+function chPrio(id, val) {
+  const p = val==='' ? null : parseInt(val);
+  tasks = tasks.map(t => t.id===id ? {...t, p} : t);
+  persist(); render();
+}
+function delT(id) {
+  if (!confirm('Supprimer cette tâche ?')) return;
+  tasks = tasks.filter(t => t.id!==id);
+  persist(); render();
+}
+function addT(zid) {
+  const p = zid==='null' ? null : parseInt(zid);
+  const cEl = document.getElementById(`c-${zid}`);
+  const aEl = document.getElementById(`a-${zid}`);
+  const c = cEl ? cEl.value.trim() : '';
+  const a = aEl ? aEl.value.trim() : '';
+  if (!c && !a) return;
+  tasks.push({id:nid++, p, c, t:a, done:false});
+  persist(); render();
+}
+function clearDone(zid) {
+  const p = zid==='null' ? null : parseInt(zid);
+  tasks = tasks.filter(t => !(t.p===p && t.done));
+  persist(); render();
+}
+function toggleCol(zkey) {
+  col[zkey] = !col[zkey];
+  persist(); render();
+}
+function toggleDoneOpen(zkey) {
+  doneOpen[zkey] = !doneOpen[zkey];
+  persist(); render();
+}
+
+function openEdit(id) {
+  const t = tasks.find(x => x.id===id);
+  if (!t) return;
+  const ov = document.getElementById('edit-overlay');
+  ov.style.display = 'flex';
+  ov.innerHTML = `<div class="edit-modal">
+    <h3>Modifier la tâche</h3>
+    <label>Contact</label>
+    <input id="edit-c" type="text" value="${esc(t.c)}">
+    <label>Action / Objet</label>
+    <input id="edit-t" type="text" value="${esc(t.t)}">
+    <div class="edit-actions">
+      <button class="btn-cancel" onclick="closeEdit()">Annuler</button>
+      <button class="btn-save" onclick="saveEdit(${id})">Enregistrer</button>
+    </div>
+  </div>`;
+  setTimeout(() => document.getElementById('edit-c').focus(), 50);
+}
+function closeEdit() {
+  document.getElementById('edit-overlay').style.display = 'none';
+}
+function saveEdit(id) {
+  const c = document.getElementById('edit-c').value.trim();
+  const t = document.getElementById('edit-t').value.trim();
+  tasks = tasks.map(x => x.id===id ? {...x, c, t} : x);
+  persist(); closeEdit(); render();
+}
+document.getElementById('edit-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeEdit();
+});
+
+render();
+</script>
+</body>
+</html>
