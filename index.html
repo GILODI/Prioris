@@ -32,7 +32,7 @@ h1 { font-size: 17px; font-weight: 700; color: #1F3864; margin-bottom: 2px; }
 .star-btn { font-size: 15px; color: #ddd; cursor: pointer; padding: 0 3px; align-self: center; line-height: 1; flex-shrink: 0; transition: color 0.15s; }
 .star-btn.starred { color: #e53935; }
 .star-btn:hover { color: #e53935; }
-.zone-5 .zone-header { background: #ede7f6; color: #5e35b1; }
+.zone-4 .zone-header { background: #ede7f6; color: #5e35b1; }
 .zone-u .zone-header { background: #eeeeee; color: #555; }
 .task.starred-row { background: #ffe5e5; border-left: 3px solid #e53935; padding-left: 10px; }
 .task.starred-row:hover { background: #ffdada; }
@@ -119,7 +119,7 @@ const ZONES = [
   { id: 1, label: '🔴  1 — Urgent', cls: 'zone-1' },
   { id: 2, label: '🟡  2 — Cette semaine', cls: 'zone-2' },
   { id: 3, label: '🔵  3 — File d\'attente', cls: 'zone-3' },
-  { id: 5, label: '🟣  5 — Perso', cls: 'zone-5' },
+  { id: 4, label: '🟣  4 — Perso', cls: 'zone-4' },
   { id: null, label: '—  À classer', cls: 'zone-u' },
 ];
 const DEFAULTS = [
@@ -259,7 +259,7 @@ try {
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function tHtml(t, isDone) {
-  const opts = `<option value="">—</option>${[0,1,2,3,5].map(p=>`<option value="${p}"${t.p===p?' selected':''}>${p}</option>`).join('')}`;
+  const opts = `<option value="">—</option>${[0,1,2,3,4].map(p=>`<option value="${p}"${t.p===p?' selected':''}>${p}</option>`).join('')}`;
   const contact = t.c ? `<div class="task-contact">${esc(t.c)}</div>` : '';
   const text = t.t ? `<div class="task-text">${esc(t.t)}</div>` : `<div class="task-text"><em>—</em></div>`;
   const doneClass = isDone ? ' done-task' : '';
@@ -467,12 +467,12 @@ function updateMicBtn() {
 function parsePriority(raw) {
   if (!raw) return null;
   const s = raw.toLowerCase().trim();
-  if (/^\d+$/.test(s)) { const n = parseInt(s,10); return [0,1,2,3,5].includes(n) ? n : null; }
+  if (/^\d+$/.test(s)) { const n = parseInt(s,10); return [0,1,2,3,4].includes(n) ? n : null; }
   if (/urgent/.test(s)) return 1;
   if (/(vite|5\s?min|cinq\s?minutes)/.test(s)) return 0;
   if (/semaine/.test(s)) return 2;
   if (/(plus tard|attente|file)/.test(s)) return 3;
-  if (/perso/.test(s)) return 5;
+  if (/perso/.test(s)) return 4;
   return null;
 }
 
