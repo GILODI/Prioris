@@ -1,5 +1,5 @@
-const CACHE = 'prioris-v1';
-const ASSETS = ['./', './index.html', './config.js', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
+const CACHE = 'prioris-v2';
+const ASSETS = ['./', './index.html', './config.js', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));

@@ -369,9 +369,9 @@ function syncUpdate(id, fields) {
   if ('t' in fields) dbFields.text = fields.t;
   sb.from('tasks').update(dbFields).eq('id', id).then(({error}) => { if (error) console.error('Supabase update', error); });
 }
-async function createTask({p, c, t}) {
+async function createTask({p, c, t, star = false}) {
   if (sb) {
-    const { data, error } = await sb.from('tasks').insert([{priority:p, contact:c, text:t, done:false, star:false}]).select().single();
+    const { data, error } = await sb.from('tasks').insert([{priority:p, contact:c, text:t, done:false, star:!!star}]).select().single();
     if (!error && data) {
       tasks.push(dbToLocal(data));
       persist(); render();
@@ -379,7 +379,7 @@ async function createTask({p, c, t}) {
     }
     console.error('Supabase insert', error);
   }
-  tasks.push({id:nid++, p, c, t, done:false, star:false});
+  tasks.push({id:nid++, p, c, t, done:false, star:!!star});
   persist(); render();
 }
 
@@ -476,23 +476,55 @@ function parsePriority(raw) {
   return null;
 }
 
+function normWord(w) {
+  return w.toLowerCase()
+    .replace(/[àáâãäå]/g, 'a')
+    .replace(/[èéêë]/g, 'e')
+    .replace(/[ìíîï]/g, 'i')
+    .replace(/[òóôõö]/g, 'o')
+    .replace(/[ùúûü]/g, 'u')
+    .replace(/ç/g, 'c')
+    .replace(/^[.,;:!?]+|[.,;:!?]+$/g, '');
+}
+
+// Retire le mot "étoile" (n'importe où, insensible aux accents/casse) d'un bloc,
+// et signale si le bloc ne contenait QUE ce mot (auquel cas il faut le supprimer
+// entièrement pour ne pas décaler les positions contact/remarque/importance).
+function stripStarWord(part) {
+  const words = part.split(/\s+/).filter(Boolean);
+  const kept = words.filter(w => normWord(w) !== 'etoile');
+  const found = kept.length !== words.length;
+  const wasOnlyStar = words.length > 0 && kept.length === 0;
+  return { text: kept.join(' '), found, dropBlock: wasOnlyStar };
+}
+
 function parseQuickInput(raw) {
   let s = raw.trim().replace(/\s*\b(slash|barre oblique|barre)\b\s*/gi, ' / ');
-  const parts = s.split('/').map(p => p.trim());
+  const rawParts = s.split('/').map(p => p.trim());
+
+  let star = false;
+  const parts = [];
+  for (const rawPart of rawParts) {
+    const { text, found, dropBlock } = stripStarWord(rawPart);
+    if (found) star = true;
+    if (dropBlock) continue;
+    parts.push(text);
+  }
+
   let c = '', t = '', prioRaw = '';
   if (parts.length >= 3) { c = parts[0]; t = parts[1]; prioRaw = parts.slice(2).join(' '); }
   else if (parts.length === 2) { c = parts[0]; t = parts[1]; }
   else { t = parts[0] || ''; }
-  return { c, t, p: parsePriority(prioRaw) };
+  return { c, t, p: parsePriority(prioRaw), star };
 }
 
 function quickAdd() {
   const inp = document.getElementById('quick-input');
   const raw = inp.value.trim();
   if (!raw) return;
-  const { c, t, p } = parseQuickInput(raw);
+  const { c, t, p, star } = parseQuickInput(raw);
   if (!c && !t) return;
-  createTask({p, c, t});
+  createTask({p, c, t, star});
   inp.value = '';
 }
 function toggleCol(zkey) {
