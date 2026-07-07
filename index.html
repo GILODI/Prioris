@@ -438,30 +438,61 @@ function setupRealtime() {
 }
 
 // --- Saisie unique avec dictée vocale : "contact / remarque / importance" ---
+// Le micro reste actif en continu (il redémarre tout seul après chaque silence)
+// jusqu'à ce qu'on reclique dessus ou qu'on valide la tâche.
 let recognition = null;
-let listening = false;
+let shouldListen = false;
+let micFatalError = false;
 
 function toggleDictation() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { alert('Dictée vocale non supportée sur ce navigateur.'); return; }
-  if (listening && recognition) { recognition.stop(); return; }
+  if (shouldListen) { stopDictation(); return; }
+  shouldListen = true;
+  micFatalError = false;
+  updateMicBtn();
+  startRecognition(SR);
+}
+
+function stopDictation() {
+  shouldListen = false;
+  updateMicBtn();
+  if (recognition) { try { recognition.stop(); } catch(e){} }
+}
+
+function startRecognition(SR) {
   recognition = new SR();
   recognition.lang = 'fr-FR';
+  recognition.continuous = true;
   recognition.interimResults = false;
   recognition.maxAlternatives = 1;
   recognition.onresult = (e) => {
-    const transcript = e.results[0][0].transcript;
     const inp = document.getElementById('quick-input');
-    inp.value = (inp.value ? inp.value.trim() + ' ' : '') + transcript;
+    let addition = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) addition += (addition ? ' ' : '') + e.results[i][0].transcript;
+    }
+    if (addition) inp.value = (inp.value ? inp.value.trim() + ' ' : '') + addition.trim();
   };
-  recognition.onstart = () => { listening = true; updateMicBtn(); };
-  recognition.onend = () => { listening = false; updateMicBtn(); };
-  recognition.onerror = () => { listening = false; updateMicBtn(); };
-  recognition.start();
+  recognition.onerror = (e) => {
+    if (['not-allowed', 'audio-capture', 'service-not-allowed'].includes(e.error)) {
+      micFatalError = true;
+      shouldListen = false;
+      updateMicBtn();
+      alert('Micro indisponible : ' + e.error);
+    }
+  };
+  recognition.onend = () => {
+    if (shouldListen && !micFatalError) {
+      setTimeout(() => { if (shouldListen) startRecognition(SR); }, 200);
+    }
+  };
+  try { recognition.start(); } catch(e) {}
 }
+
 function updateMicBtn() {
   const btn = document.getElementById('mic-btn');
-  if (btn) btn.classList.toggle('listening', listening);
+  if (btn) btn.classList.toggle('listening', shouldListen);
 }
 
 function parsePriority(raw) {
@@ -503,25 +534,36 @@ function parseQuickInput(raw) {
   const rawParts = s.split('/').map(p => p.trim());
 
   let star = false;
-  const parts = [];
+  const blocks = [];
   for (const rawPart of rawParts) {
     const { text, found, dropBlock } = stripStarWord(rawPart);
     if (found) star = true;
     if (dropBlock) continue;
-    parts.push(text);
+    blocks.push(text);
   }
 
-  let c = '', t = '', prioRaw = '';
-  if (parts.length >= 3) { c = parts[0]; t = parts[1]; prioRaw = parts.slice(2).join(' '); }
-  else if (parts.length === 2) { c = parts[0]; t = parts[1]; }
-  else { t = parts[0] || ''; }
-  return { c, t, p: parsePriority(prioRaw), star };
+  // Repère un bloc "priorité" (mot ou chiffre) n'importe où parmi les blocs — pas
+  // seulement en dernière position — et le retire pour ne pas décaler contact/remarque.
+  // Un bloc isolé (pas de "/" du tout) n'est jamais interprété comme une priorité seule.
+  let p = null;
+  if (blocks.length > 1) {
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const candidate = parsePriority(blocks[i]);
+      if (candidate !== null) { p = candidate; blocks.splice(i, 1); break; }
+    }
+  }
+
+  let c = '', t = '';
+  if (blocks.length >= 2) { c = blocks[0]; t = blocks.slice(1).join(' / '); }
+  else { t = blocks[0] || ''; }
+  return { c, t, p, star };
 }
 
 function quickAdd() {
   const inp = document.getElementById('quick-input');
   const raw = inp.value.trim();
   if (!raw) return;
+  stopDictation();
   const { c, t, p, star } = parseQuickInput(raw);
   if (!c && !t) return;
   createTask({p, c, t, star});
