@@ -45,6 +45,10 @@ h1 { font-size: 17px; font-weight: 700; color: #1F3864; margin-bottom: 2px; }
 .task-text { font-size: 12px; color: #333; line-height: 1.4; }
 .task-text em { color: #bbb; font-style: normal; }
 .check { width: 17px; height: 17px; min-width: 17px; border: 1.5px solid #ccc; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-top: 2px; flex-shrink: 0; }
+.drag-handle { font-size: 14px; color: #ccc; cursor: grab; padding: 0 2px; align-self: center; line-height: 1; flex-shrink: 0; touch-action: none; }
+.drag-handle:hover { color: #888; }
+.sortable-ghost { opacity: 0.35; }
+.sortable-chosen .drag-handle { cursor: grabbing; }
 .check.on { background: #1F3864; border-color: #1F3864; }
 .check.on::after { content: '✓'; color: #fff; font-size: 10px; font-weight: 800; }
 .prio-sel { font-size: 11px; border: 1px solid #ddd; border-radius: 5px; padding: 3px 4px; color: #444; background: #fafafa; cursor: pointer; align-self: center; flex-shrink: 0; }
@@ -107,10 +111,11 @@ h1 { font-size: 17px; font-weight: 700; color: #1F3864; margin-bottom: 2px; }
   <button class="mic-btn" id="mic-btn" onclick="toggleDictation()" title="Dictée vocale">🎤</button>
   <button class="add-btn" onclick="quickAdd()">+ Ajouter</button>
 </div>
-<p class="quick-hint">Dictez « contact slash remarque slash importance » — les infos manquantes prennent une valeur par défaut.</p>
+<p class="quick-hint">Dictez « contact virgule remarque virgule importance » — les infos manquantes prennent une valeur par défaut.</p>
 <div id="app"></div>
 <div id="edit-overlay" style="display:none"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script src="config.js"></script>
 <script>
 const KEY = 'camp_todo_v4';
@@ -266,7 +271,9 @@ function tHtml(t, isDone) {
   const starred = t.star ? ' starred' : '';
   const rowStar = t.star ? ' starred-row' : '';
   const starTitle = t.star ? 'Retirer la priorité' : 'Marquer prioritaire';
+  const handle = isDone ? '' : `<span class="drag-handle" title="Glisser pour réordonner">⠿</span>`;
   return `<div class="task${doneClass}${rowStar}" id="task-${t.id}">
+    ${handle}
     <div class="check${isDone?' on':''}" onclick="togDone(${t.id})"></div>
     <div class="task-body">${contact}${text}</div>
     <span class="star-btn${starred}" onclick="togStar(${t.id})" title="${starTitle}">★</span>
@@ -276,10 +283,14 @@ function tHtml(t, isDone) {
   </div>`;
 }
 
+function sortForZone(list) {
+  return [...list].sort((a, b) => (a.sort ?? a.id) - (b.sort ?? b.id));
+}
+
 function render() {
   let html = '';
   ZONES.forEach(z => {
-    const active = tasks.filter(t => t.p === z.id && !t.done);
+    const active = sortForZone(tasks.filter(t => t.p === z.id && !t.done));
     const done = tasks.filter(t => t.p === z.id && t.done);
     const zkey = String(z.id);
     const isCol = col[zkey];
@@ -290,7 +301,7 @@ function render() {
       <span class="count">${active.length} à faire</span>
       <span class="chevron">▾</span>
     </div>`;
-    html += `<div class="task-list">`;
+    html += `<div class="task-list" data-zone="${zkey}">`;
     if (!active.length) html += `<div class="empty-msg">Aucune tâche</div>`;
     active.forEach(t => { html += tHtml(t, false); });
     html += `</div>`;
@@ -315,6 +326,40 @@ function render() {
     html += `</div>`;
   });
   document.getElementById('app').innerHTML = html;
+  initSortables();
+}
+
+let sortableInstances = [];
+function initSortables() {
+  sortableInstances.forEach(s => s.destroy());
+  sortableInstances = [];
+  if (typeof Sortable === 'undefined') return;
+  document.querySelectorAll('.task-list[data-zone]').forEach(el => {
+    sortableInstances.push(Sortable.create(el, {
+      handle: '.drag-handle',
+      animation: 150,
+      onEnd: () => onZoneReorder(el),
+    }));
+  });
+}
+
+function onZoneReorder(listEl) {
+  const ids = Array.from(listEl.children)
+    .map(li => parseInt((li.id || '').replace('task-', ''), 10))
+    .filter(id => !isNaN(id));
+  const reordered = [];
+  ids.forEach((id, idx) => {
+    const t = tasks.find(x => x.id === id);
+    if (t) { t.sort = idx; reordered.push(t); }
+  });
+  persist(); render();
+  syncReorder(reordered);
+}
+
+function syncReorder(reordered) {
+  if (!sb || !reordered.length) return;
+  const rows = reordered.map(t => ({ id: t.id, sort: t.sort }));
+  sb.from('tasks').upsert(rows, { onConflict: 'id' }).then(({error}) => { if (error) console.error('Supabase reorder', error); });
 }
 
 function togDone(id) {
@@ -357,7 +402,7 @@ function clearDone(zid) {
 }
 
 function dbToLocal(row) {
-  return { id: row.id, p: row.priority, c: row.contact || '', t: row.text || '', done: !!row.done, star: !!row.star };
+  return { id: row.id, p: row.priority, c: row.contact || '', t: row.text || '', done: !!row.done, star: !!row.star, sort: row.sort ?? null };
 }
 function syncUpdate(id, fields) {
   if (!sb) return;
@@ -370,8 +415,9 @@ function syncUpdate(id, fields) {
   sb.from('tasks').update(dbFields).eq('id', id).then(({error}) => { if (error) console.error('Supabase update', error); });
 }
 async function createTask({p, c, t, star = false}) {
+  const sortVal = Date.now();
   if (sb) {
-    const { data, error } = await sb.from('tasks').insert([{priority:p, contact:c, text:t, done:false, star:!!star}]).select().single();
+    const { data, error } = await sb.from('tasks').insert([{priority:p, contact:c, text:t, done:false, star:!!star, sort:sortVal}]).select().single();
     if (!error && data) {
       tasks.push(dbToLocal(data));
       persist(); render();
@@ -379,7 +425,7 @@ async function createTask({p, c, t, star = false}) {
     }
     console.error('Supabase insert', error);
   }
-  tasks.push({id:nid++, p, c, t, done:false, star:!!star});
+  tasks.push({id:nid++, p, c, t, done:false, star:!!star, sort:sortVal});
   persist(); render();
 }
 
@@ -530,9 +576,10 @@ function stripStarWord(part) {
 }
 
 function parseQuickInput(raw) {
+  // "virgule" est le mot recommandé (natif, bien reconnu par la dictée fr-FR).
   // "slash" est souvent mal transcrit par la dictée téléphone (ex: "flash") : on
-  // tolère les variantes les plus fréquentes en plus du mot lui-même.
-  let s = raw.trim().replace(/\s*\b(slash|flash|barre oblique|barre)\b\s*/gi, ' / ');
+  // garde ces variantes en reconnaissance de secours pour ne rien casser.
+  let s = raw.trim().replace(/\s*\b(virgule|slash|flash|barre oblique|barre)\b\s*/gi, ' / ');
   const rawParts = s.split('/').map(p => p.trim());
 
   let star = false;

@@ -7,6 +7,7 @@ create table public.tasks (
   priority int,
   done boolean not null default false,
   star boolean not null default false,
+  sort bigint,
   created_at timestamptz not null default now()
 );
 
