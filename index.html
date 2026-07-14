@@ -544,11 +544,13 @@ function updateMicBtn() {
 function parsePriority(raw) {
   if (!raw) return null;
   const s = raw.toLowerCase().trim();
-  // La dictée transcrit parfois un chiffre en toutes lettres (ex: "zéro" au lieu de "0").
+  // La dictée ajoute parfois une ponctuation finale invisible (ex: "0." au lieu de "0")
+  // et transcrit parfois un chiffre en toutes lettres (ex: "zéro" au lieu de "0") :
+  // on travaille sur la version nettoyée pour les deux tests suivants.
   const wordNums = { zero: 0, un: 1, une: 1, deux: 2, trois: 3, quatre: 4 };
   const normalized = normWord(s);
   if (Object.prototype.hasOwnProperty.call(wordNums, normalized)) return wordNums[normalized];
-  if (/^\d+$/.test(s)) { const n = parseInt(s,10); return [0,1,2,3,4].includes(n) ? n : null; }
+  if (/^\d+$/.test(normalized)) { const n = parseInt(normalized,10); return [0,1,2,3,4].includes(n) ? n : null; }
   if (/urgent/.test(s)) return 1;
   if (/(vite|5\s?min|cinq\s?minutes)/.test(s)) return 0;
   if (/semaine/.test(s)) return 2;
