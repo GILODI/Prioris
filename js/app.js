@@ -175,12 +175,6 @@ const actions = {
     if (!armed(el, 'Confirmer')) return;
     store.deleteIdea(Number(el.dataset.id));
   },
-  'login-back': () => {
-    login.step = 'email';
-    login.message = '';
-    document.getElementById('view').innerHTML = renderLogin();
-    document.getElementById('login-email').focus();
-  },
   'sign-out': el => {
     if (!armed(el, 'Confirmer la déconnexion')) return;
     store.signOut();
@@ -219,8 +213,10 @@ document.addEventListener('submit', e => {
   stopDictation();
   const data = new FormData(form);
 
-  if (form.dataset.form === 'login-email') { submitLoginEmail(String(data.get('email') || '').trim().toLowerCase()); return; }
-  if (form.dataset.form === 'login-code') { submitLoginCode(String(data.get('code') || '').replace(/\D/g, '')); return; }
+  if (form.dataset.form === 'login') {
+    submitLogin(String(data.get('email') || '').trim().toLowerCase(), String(data.get('password') || ''));
+    return;
+  }
 
   if (form.dataset.form === 'capture') {
     const raw = String(data.get('text') || '').trim();
@@ -274,39 +270,24 @@ function showLoginScreen(focusId) {
   if (el) el.focus();
 }
 
-async function submitLoginEmail(email) {
-  if (!email) return;
+async function submitLogin(email, password) {
+  if (!email || !password) return;
   login.email = email;
   login.busy = true;
   login.message = '';
-  showLoginScreen('login-email');
-  const err = await store.sendLoginCode(email);
+  showLoginScreen('login-password');
+  const err = await store.signIn(email, password);
   login.busy = false;
   if (err) {
-    login.message = /rate|seconds/i.test(err)
-      ? 'Un code vient déjà d\'être envoyé. Patiente une minute avant d\'en redemander un.'
-      : 'L\'envoi du code a échoué. Vérifie l\'adresse et réessaie.';
-    showLoginScreen('login-email');
+    login.message = /invalid/i.test(err)
+      ? 'Adresse ou mot de passe incorrect.'
+      : /confirm/i.test(err)
+        ? 'Ce compte n\'est pas encore confirmé dans Supabase.'
+        : 'La connexion a échoué. Vérifie ta connexion internet et réessaie.';
+    showLoginScreen('login-password');
     return;
   }
   rememberEmail(email);
-  login.step = 'code';
-  showLoginScreen('login-code');
-}
-
-async function submitLoginCode(code) {
-  if (code.length !== 6) { login.message = 'Le code fait 6 chiffres.'; showLoginScreen('login-code'); return; }
-  login.busy = true;
-  login.message = '';
-  showLoginScreen('login-code');
-  const err = await store.verifyLoginCode(login.email, code);
-  login.busy = false;
-  if (err) {
-    login.message = 'Code incorrect ou expiré. Vérifie le dernier mail reçu, ou demande un nouveau code.';
-    showLoginScreen('login-code');
-    return;
-  }
-  login.step = 'email';
   go('home');
 }
 

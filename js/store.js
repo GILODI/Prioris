@@ -100,15 +100,11 @@ function showLogin() {
   listeners.forEach(fn => fn());
 }
 
-// --- Connexion par code à 6 chiffres reçu par mail ---
+// --- Connexion par adresse + mot de passe ---
+// (Le code par e-mail demande un serveur d'envoi personnalisé sur l'offre gratuite de Supabase.)
 
-export async function sendLoginCode(email) {
-  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-  return error ? error.message : null;
-}
-
-export async function verifyLoginCode(email, code) {
-  const { data, error } = await sb.auth.verifyOtp({ email, token: code, type: 'email' });
+export async function signIn(email, password) {
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error) return error.message;
   state.needsLogin = false;
   state.user = data.user ? data.user.email : email;
