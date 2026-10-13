@@ -1,7 +1,7 @@
 {
   "name": "Prioris",
   "short_name": "Prioris",
-  "description": "Todolist Communication — catégorisation par importance, synchronisée avec Supabase",
+  "description": "Ton poste de pilotage : focus du jour, tâches, idées, et bientôt tes mails et messages WhatsApp.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -1,0 +1,143 @@
+// Fenêtres par-dessus l'écran : ajout rapide (+), modification d'une tâche,
+// et mode « une chose à la fois ».
+import { getTask, activeFocus } from './store.js';
+import { parseQuickInput } from './parse.js';
+import { esc, ZONES, zoneOf, ICONS, dueChip } from './ui.js';
+import { today } from './dates.js';
+
+const root = () => document.getElementById('sheet-root');
+let lastFocused = null;
+
+export function isOpen() { return !!root().firstElementChild; }
+
+function open(html, focusSelector) {
+  lastFocused = document.activeElement;
+  root().innerHTML = `<div class="overlay" data-action="close-sheet-bg">${html}</div>`;
+  document.body.classList.add('sheet-open');
+  const el = root().querySelector(focusSelector || 'input, textarea, button');
+  if (el) setTimeout(() => el.focus(), 30);
+}
+
+export function closeSheet() {
+  root().innerHTML = '';
+  document.body.classList.remove('sheet-open');
+  if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+}
+
+// --- Ajout rapide : tâche ou idée ---
+
+export function openCapture(mode = 'task') {
+  open(`
+  <form class="sheet" data-form="capture" data-mode="${mode}" role="dialog" aria-modal="true" aria-labelledby="capture-title">
+    <h2 id="capture-title" class="sr-only">Ajouter</h2>
+    <div class="segmented" role="tablist">
+      <button type="button" role="tab" aria-selected="${mode === 'task'}" class="${mode === 'task' ? 'on' : ''}" data-action="capture-mode" data-mode="task">Tâche</button>
+      <button type="button" role="tab" aria-selected="${mode === 'idea'}" class="${mode === 'idea' ? 'on' : ''}" data-action="capture-mode" data-mode="idea">Idée</button>
+    </div>
+    <div class="field-row">
+      <input id="capture-input" name="text" type="text" autocomplete="off"
+        placeholder="${mode === 'task' ? 'Arnaud, rappeler pour le devis, urgent' : 'Ton idée, en quelques mots'}">
+      <button type="button" class="mic" id="capture-mic" data-action="mic" data-target="capture-input" aria-label="Dicter">${ICONS.mic}</button>
+    </div>
+    ${mode === 'task' ? `
+    <p class="hint">Dicte « contact <b>virgule</b> action <b>virgule</b> importance ». Dis « étoile » pour surligner en rouge.</p>
+    <p class="preview" id="capture-preview" aria-live="polite"></p>
+    <fieldset class="choice">
+      <legend>Catégorie</legend>
+      <label><input type="radio" name="p" value="auto" checked><span>Selon la dictée</span></label>
+      ${ZONES.map(z => `<label><input type="radio" name="p" value="${z.id === null ? 'null' : z.id}"><span>${z.id !== null ? `${z.id} · ` : ''}${esc(z.label)}</span></label>`).join('')}
+    </fieldset>
+    <label class="inline-field">Échéance <input type="date" name="due"></label>` : `
+    <p class="hint">Une idée n'a ni échéance ni priorité. Tu pourras la transformer en tâche plus tard.</p>`}
+    <div class="sheet-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn ghost" data-action="close-sheet">Annuler</button>
+      <button type="submit" class="btn primary">Ajouter</button>
+    </div>
+  </form>`, '#capture-input');
+  updateCapturePreview();
+}
+
+export function updateCapturePreview() {
+  const out = document.getElementById('capture-preview');
+  const input = document.getElementById('capture-input');
+  if (!out || !input) return;
+  const raw = input.value.trim();
+  if (!raw) { out.textContent = ''; return; }
+  const { c, t, p, star } = parseQuickInput(raw);
+  const parts = [];
+  if (c) parts.push(`Contact : ${c}`);
+  parts.push(`Action : ${t || '—'}`);
+  parts.push(p === null ? 'Catégorie : à classer' : `Catégorie : ${p} · ${zoneOf(p).label}`);
+  if (star) parts.push('★ étoile');
+  out.textContent = parts.join('  ·  ');
+}
+
+// --- Modification d'une tâche ---
+
+export function openEdit(id) {
+  const t = getTask(id);
+  if (!t) return;
+  open(`
+  <form class="sheet" data-form="edit" data-id="${t.id}" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+    <h2 id="edit-title">Modifier la tâche</h2>
+    <label class="field">Contact <input name="c" type="text" value="${esc(t.c)}" autocomplete="off"></label>
+    <label class="field">Action <textarea name="t" rows="2">${esc(t.t)}</textarea></label>
+    <fieldset class="choice">
+      <legend>Catégorie</legend>
+      ${ZONES.map(z => {
+        const v = z.id === null ? 'null' : String(z.id);
+        const checked = (t.p ?? null) === z.id ? ' checked' : '';
+        return `<label><input type="radio" name="p" value="${v}"${checked}><span>${z.id !== null ? `${z.id} · ` : ''}${esc(z.label)}</span></label>`;
+      }).join('')}
+    </fieldset>
+    <label class="inline-field">Échéance <input type="date" name="due" value="${t.due || ''}"></label>
+    <div class="switches">
+      <label class="switch"><input type="checkbox" name="focus"${t.focus === today() ? ' checked' : ''}><span>Dans mon focus du jour</span></label>
+      <label class="switch"><input type="checkbox" name="waiting"${t.waiting ? ' checked' : ''}><span>En attente d'une réponse</span></label>
+      <label class="switch"><input type="checkbox" name="star"${t.star ? ' checked' : ''}><span>Étoile (ligne en rouge)</span></label>
+    </div>
+    <div class="sheet-actions">
+      <button type="button" class="btn ghost danger" data-action="delete-task" data-id="${t.id}">Supprimer</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn ghost" data-action="close-sheet">Annuler</button>
+      <button type="submit" class="btn primary">Enregistrer</button>
+    </div>
+  </form>`, 'input[name="c"]');
+}
+
+// --- Une chose à la fois ---
+
+let focusIndex = 0;
+
+export function openFocusMode() {
+  focusIndex = 0;
+  renderFocusMode();
+}
+
+export function focusModeNext() { focusIndex++; renderFocusMode(); }
+
+export function renderFocusMode() {
+  const list = activeFocus();
+  if (!list.length) {
+    open(`<div class="sheet focus-mode" role="dialog" aria-modal="true" aria-labelledby="fm-title">
+      <h2 id="fm-title">Focus terminé</h2>
+      <p class="muted">Les tâches de ton focus du jour sont faites. Tu peux souffler, ou en choisir d'autres depuis l'accueil.</p>
+      <div class="sheet-actions"><span class="spacer"></span><button class="btn primary" data-action="close-sheet">Retour à l'accueil</button></div>
+    </div>`);
+    return;
+  }
+  if (focusIndex >= list.length) focusIndex = 0;
+  const t = list[focusIndex];
+  open(`<div class="sheet focus-mode" role="dialog" aria-modal="true" aria-labelledby="fm-title">
+    <p class="label">Une chose à la fois · ${focusIndex + 1} sur ${list.length}</p>
+    ${t.c ? `<p class="fm-contact">${esc(t.c)}</p>` : ''}
+    <h2 id="fm-title" class="fm-text">${t.t ? esc(t.t) : 'Sans description'}</h2>
+    <div class="chips">${dueChip(t.due)}</div>
+    <div class="fm-actions">
+      <button class="btn primary big" data-action="fm-done" data-id="${t.id}">C'est fait</button>
+      ${list.length > 1 ? `<button class="btn big" data-action="fm-next">Plus tard</button>` : ''}
+    </div>
+    <div class="sheet-actions"><span class="spacer"></span><button class="btn ghost" data-action="close-sheet">Fermer</button></div>
+  </div>`, '[data-action="fm-done"]');
+}
