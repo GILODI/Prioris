@@ -48,7 +48,9 @@ export function zoneChip(p) {
 // Une ligne de tâche. opts : handle (poignée de glisser), showZone (rappel de catégorie),
 // focusButton ('add' | 'remove').
 export function taskRow(t, opts = {}) {
-  const chips = [opts.showZone ? zoneChip(t.p) : '', dueChip(t.due), waitingChip(t)].join('');
+  const src = t.source === 'mail' ? '<span class="chip src-mail">Mail</span>'
+    : t.source === 'whatsapp' ? '<span class="chip src-whatsapp">WhatsApp</span>' : '';
+  const chips = [opts.showZone ? zoneChip(t.p) : '', src, dueChip(t.due), waitingChip(t)].join('');
   const focusBtn = opts.focusButton === 'add'
     ? `<button class="mini-btn" data-action="focus-add" data-id="${t.id}" aria-label="Ajouter au focus du jour">+ Focus</button>`
     : opts.focusButton === 'remove'

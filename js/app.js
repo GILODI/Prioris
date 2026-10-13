@@ -1,7 +1,7 @@
 // Point d'entrée : navigation entre les écrans, actions, ajout rapide, messages.
 import * as store from './store.js';
 import { renderHome } from './views/home.js';
-import { renderInbox, skipTask } from './views/inbox.js';
+import { renderInbox, skipItem, setInboxTab, queues } from './views/inbox.js';
 import { renderTasks, setFilter, toggleCollapse, toggleDoneList } from './views/tasks.js';
 import { renderIdeas } from './views/ideas.js';
 import { renderLogin, login, rememberEmail } from './views/login.js';
@@ -52,7 +52,7 @@ function render() {
     if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   const badge = document.getElementById('inbox-badge');
-  const n = store.state.tasks.filter(t => !t.done && t.p === null && !t.waiting).length;
+  const n = queues().main.length;
   if (badge) { badge.textContent = n; badge.hidden = n === 0; }
   initSortables();
 }
@@ -86,6 +86,15 @@ function toast(msg, tone = '') {
   el.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.hidden = true; }, 3500);
+}
+
+function selectText(el) {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  toast('Texte sélectionné : copie-le avec le menu ou Ctrl+C.');
 }
 
 // --- Confirmation en deux temps (les boîtes de dialogue natives sont évitées) ---
@@ -166,7 +175,26 @@ const actions = {
     toast('Classée.', 'good');
   },
   'triage-wait': el => { store.updateTask(Number(el.dataset.id), { waiting: true }); toast('Mise en attente.'); },
-  'triage-skip': el => { skipTask(Number(el.dataset.id)); render(); },
+  'triage-skip': el => { skipItem(el.dataset.key); render(); },
+  'inbox-tab': el => { setInboxTab(el.dataset.tab); render(); },
+  'inbox-task': el => {
+    store.inboxToTask(Number(el.dataset.id), { p: Number(el.dataset.p) });
+    toast('Tâche créée.', 'good');
+  },
+  'inbox-wait': el => {
+    store.inboxToTask(Number(el.dataset.id), { p: Number(el.dataset.p), waiting: true });
+    toast('Tâche créée, en attente de réponse.', 'good');
+  },
+  'inbox-ignore': el => { store.ignoreInbox(Number(el.dataset.id)); toast('Classé sans tâche.'); },
+  'copy-draft': el => {
+    const src = document.getElementById(el.dataset.target);
+    if (!src) return;
+    const text = src.textContent;
+    const done = () => toast('Réponse copiée.', 'good');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => selectText(src));
+    } else selectText(src);
+  },
   'triage-delete': el => {
     if (!armed(el, 'Confirmer')) return;
     store.deleteTasks([Number(el.dataset.id)]);

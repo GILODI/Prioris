@@ -191,6 +191,22 @@ h2 { font-size: 16.5px; margin: 0; }
 .inline-field input, .field input, .field textarea, .field-row input { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--surface-2); min-height: 40px; }
 .done-big { font-size: 20px; font-weight: 700; }
 
+/* --- Messages à trier --- */
+.chip.src-mail { background: var(--accent-soft); color: var(--accent); }
+.chip.src-whatsapp { background: var(--green-soft); color: var(--green); }
+.triage.is-urgent { border-color: var(--red); border-width: 1.5px; }
+.urgent-flag { margin: 0; background: var(--red-soft); color: var(--red); font-weight: 700; font-size: 13.5px; border-radius: 8px; padding: 6px 10px; }
+.proposal { background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; display: grid; gap: 3px; font-size: 14px; }
+.proposal p { margin: 0; }
+.draft-block { display: grid; gap: 6px; justify-items: start; }
+.draft { margin: 0; white-space: pre-wrap; background: var(--surface-2); border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; width: 100%; overflow-wrap: anywhere; }
+.zone-btn.proposed { border-color: var(--zone-ink); box-shadow: 0 0 0 2px var(--zone-soft); }
+.zone-btn em { font-style: normal; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; }
+.counts div { display: grid; }
+.counts b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.counts span { font-size: 12px; color: var(--muted); }
+
 /* --- Idées --- */
 .idea-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .idea { gap: 8px; }

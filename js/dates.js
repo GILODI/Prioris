@@ -38,6 +38,15 @@ export function dueLabel(iso) {
   return `${WEEKDAYS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// "aujourd'hui", "hier", "il y a 5 j"
+export function agoLabel(iso) {
+  const n = daysUntil(iso);
+  if (n === null) return '';
+  if (n >= 0) return 'aujourd\'hui';
+  if (n === -1) return 'hier';
+  return `il y a ${-n} j`;
+}
+
 export function longDate(d = new Date()) {
   return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 }

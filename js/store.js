@@ -7,6 +7,8 @@ const CACHE_KEY = 'prioris_v2_cache';
 export const state = {
   tasks: [],
   ideas: [],
+  inbox: [],              // messages (mails, WhatsApp) importés, pas encore traités
+  inboxAvailable: true,   // false tant que la table "inbox_items" n'existe pas
   ready: false,
   online: false,
   needsLogin: false,
@@ -38,6 +40,7 @@ function report(error, message) {
 const FIELD_MAP = {
   p: 'priority', c: 'contact', t: 'text', done: 'done', star: 'star', sort: 'sort',
   due: 'due_date', waiting: 'waiting', waitingSince: 'waiting_since', focus: 'focus_date',
+  source: 'source',
 };
 const V2_FIELDS = ['due', 'waiting', 'waitingSince', 'focus'];
 
@@ -46,7 +49,17 @@ function taskFromRow(r) {
     id: r.id, p: r.priority ?? null, c: r.contact || '', t: r.text || '',
     done: !!r.done, star: !!r.star, sort: r.sort ?? null,
     due: r.due_date || null, waiting: !!r.waiting, waitingSince: r.waiting_since || null,
-    focus: r.focus_date || null, createdAt: r.created_at || null,
+    focus: r.focus_date || null, createdAt: r.created_at || null, source: r.source || null,
+  };
+}
+
+function inboxFromRow(r) {
+  return {
+    id: r.id, source: r.source, receivedOn: r.received_on || null, sender: r.sender || '',
+    subject: r.subject || '', summary: r.summary || '', action: r.proposed_action || '',
+    p: r.proposed_priority ?? null, due: r.proposed_due || null, draft: r.draft_reply || '',
+    urgent: !!r.urgent, urgencyReason: r.urgency_reason || '', needsAction: r.needs_action !== false,
+    status: r.status, createdAt: r.created_at || null,
   };
 }
 
@@ -95,6 +108,7 @@ function showLogin() {
   state.user = null;
   state.tasks = [];
   state.ideas = [];
+  state.inbox = [];
   state.ready = true;
   try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
   listeners.forEach(fn => fn());
@@ -121,10 +135,13 @@ export async function signOut() {
 
 async function loadRemote() {
   try {
-    const [tasksRes, ideasRes] = await Promise.all([
+    const [tasksRes, ideasRes, inboxRes] = await Promise.all([
       sb.from('tasks').select('*').order('id', { ascending: true }),
       sb.from('ideas').select('*').order('created_at', { ascending: false }),
+      sb.from('inbox_items').select('*').eq('status', 'new').order('received_on', { ascending: false }),
     ]);
+    if (inboxRes.error) { state.inboxAvailable = false; state.inbox = []; }
+    else { state.inboxAvailable = true; state.inbox = inboxRes.data.map(inboxFromRow); }
     if (tasksRes.error) throw tasksRes.error;
     state.tasks = tasksRes.data.map(taskFromRow);
     state.schemaV2 = tasksRes.data.length === 0 || 'focus_date' in tasksRes.data[0];
@@ -162,6 +179,13 @@ function listenRealtime() {
       }
       emit();
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox_items' }, payload => {
+      const row = payload.new && payload.new.id ? payload.new : null;
+      const id = row ? row.id : payload.old.id;
+      state.inbox = state.inbox.filter(x => x.id !== id);
+      if (row && row.status === 'new') state.inbox.push(inboxFromRow(row));
+      emit();
+    })
     .subscribe();
 }
 
@@ -169,23 +193,52 @@ function listenRealtime() {
 
 export function getTask(id) { return state.tasks.find(x => x.id === id); }
 
-export async function createTask({ p = null, c = '', t = '', star = false, due = null }) {
+export async function createTask({ p = null, c = '', t = '', star = false, due = null, source = null, waiting = false }) {
+  const now = new Date().toISOString();
   const local = {
     id: tmpId--, p, c, t, done: false, star, sort: Date.now(),
-    due, waiting: false, waitingSince: null, focus: null, createdAt: new Date().toISOString(),
+    due, waiting, waitingSince: waiting ? now : null, focus: null, createdAt: now, source,
   };
   state.tasks.push(local);
   emit();
-  if (!sb) return;
+  if (!sb) return local;
   const row = { priority: p, contact: c, text: t, done: false, star, sort: local.sort };
   if (due) row.due_date = due;
+  if (source) row.source = source;
+  if (waiting) { row.waiting = true; row.waiting_since = now; }
   const { data, error } = await sb.from('tasks').insert([row]).select().single();
-  if (error) { report(error, 'La tâche est enregistrée sur cet appareil mais pas synchronisée.'); return; }
+  if (error) { report(error, 'La tâche est enregistrée sur cet appareil mais pas synchronisée.'); return local; }
+  const created = taskFromRow(data);
   const i = state.tasks.indexOf(local);
   if (state.tasks.some(x => x.id === data.id)) { if (i >= 0) state.tasks.splice(i, 1); }
-  else if (i >= 0) state.tasks[i] = taskFromRow(data);
+  else if (i >= 0) state.tasks[i] = created;
   emit();
+  return created;
 }
+
+// --- Messages à trier ---
+
+function setInboxStatus(id, fields) {
+  state.inbox = state.inbox.filter(x => x.id !== id);
+  emit();
+  if (!sb) return;
+  sb.from('inbox_items').update(fields).eq('id', id)
+    .then(({ error }) => { if (error) report(error, 'Le message n\'a pas été mis à jour dans la base.'); });
+}
+
+// Transforme un message en tâche : contact = expéditeur, action = action proposée.
+export async function inboxToTask(id, { p, waiting = false }) {
+  const item = state.inbox.find(x => x.id === id);
+  if (!item) return;
+  state.inbox = state.inbox.filter(x => x.id !== id);
+  const task = await createTask({
+    p, c: item.sender, t: item.action || item.summary, star: item.urgent,
+    due: item.due, source: item.source, waiting,
+  });
+  setInboxStatus(id, { status: 'task', task_id: task && task.id > 0 ? task.id : null });
+}
+
+export function ignoreInbox(id) { setInboxStatus(id, { status: 'ignored' }); }
 
 export function updateTask(id, fields) {
   const task = getTask(id);

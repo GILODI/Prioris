@@ -2,6 +2,7 @@
 import { state, focusToday, activeFocus, focusSuggestions, FOCUS_MAX } from '../store.js';
 import { longDate, daysUntil, daysSince, dueLabel, shortDateTime } from '../dates.js';
 import { esc, taskRow } from '../ui.js';
+import { queues } from './inbox.js';
 
 export function renderHome() {
   const focus = focusToday();
@@ -12,6 +13,11 @@ export function renderHome() {
 
   const open = state.tasks.filter(t => !t.done);
   const toSort = open.filter(t => t.p === null && !t.waiting);
+  const q = queues();
+  const mainMessages = q.main.filter(e => e.kind === 'msg').map(e => e.item);
+  const mails = mainMessages.filter(m => m.source === 'mail').length;
+  const whatsapp = mainMessages.filter(m => m.source === 'whatsapp').length;
+  const urgentCount = mainMessages.filter(m => m.urgent).length;
   const deadlines = open
     .filter(t => t.due && daysUntil(t.due) <= 7)
     .sort((a, b) => a.due.localeCompare(b.due));
@@ -58,11 +64,16 @@ export function renderHome() {
   </section>
 
   <div class="grid2">
-    <section class="card" aria-labelledby="sort-title">
-      <div class="card-head"><h2 id="sort-title">À trier</h2><span class="big-num">${toSort.length}</span></div>
-      <p class="muted small">${toSort.length ? 'Tâches sans catégorie, à classer une par une.' : 'Tout est classé.'}</p>
-      ${toSort.length ? `<button class="btn wide" data-action="go" data-view="inbox">Trier maintenant</button>` : ''}
-      <p class="soon">Bientôt : tes mails et tes messages WhatsApp arriveront aussi ici.</p>
+    <section class="card${urgentCount ? ' has-urgent' : ''}" aria-labelledby="sort-title">
+      <div class="card-head"><h2 id="sort-title">À trier</h2><span class="big-num">${q.main.length}</span></div>
+      ${urgentCount ? `<p class="urgent-flag">${urgentCount} message${urgentCount > 1 ? 's' : ''} urgent${urgentCount > 1 ? 's' : ''}</p>` : ''}
+      <div class="counts">
+        <div><b>${mails}</b><span>mails</span></div>
+        <div><b>${whatsapp}</b><span>WhatsApp</span></div>
+        <div><b>${toSort.length}</b><span>tâches</span></div>
+      </div>
+      ${q.main.length ? `<button class="btn wide" data-action="go" data-view="inbox">Trier maintenant</button>` : '<p class="muted small">Rien à trier pour l\'instant.</p>'}
+      <p class="soon">${q.older.length || q.info.length ? `Aussi : ${q.older.length} plus ancien${q.older.length > 1 ? 's' : ''}, ${q.info.length} pour info. ` : ''}Pour importer tes nouveaux messages, lance « Synchroniser Prioris » dans l'application Claude.</p>
     </section>
 
     <section class="card" aria-labelledby="due-title">
