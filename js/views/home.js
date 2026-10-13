@@ -95,5 +95,6 @@ export function renderHome() {
       </ul>` : '<p class="empty">Une idée en tête ? Le bouton + la garde ici, sans l\'ajouter à tes tâches.</p>'}
       <button class="btn wide" data-action="go" data-view="ideas">Ouvrir la boîte à idées</button>
     </section>
-  </div>`;
+  </div>
+  ${state.user ? `<p class="account muted small">Connecté : ${esc(state.user)} · <button class="link" data-action="sign-out">Se déconnecter</button></p>` : ''}`;
 }

@@ -9,6 +9,8 @@ export const state = {
   ideas: [],
   ready: false,
   online: false,
+  needsLogin: false,
+  user: null,
   ideasAvailable: true,   // false tant que la table "ideas" n'existe pas côté Supabase
   schemaV2: true,         // false tant que les colonnes de l'étape 1 n'existent pas
 };
@@ -58,17 +60,70 @@ function ideaFromRow(r) { return { id: r.id, text: r.text || '', createdAt: r.cr
 
 // --- Démarrage ---
 
-export async function init() {
+function loadCache() {
   try {
     const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
     if (cached) { state.tasks = cached.tasks || []; state.ideas = cached.ideas || []; }
   } catch (e) {}
-  listeners.forEach(fn => fn());
+}
 
+export async function init() {
   const cfg = window.APP_CONFIG;
-  if (!cfg || !cfg.SUPABASE_URL || !window.supabase) { state.ready = true; emit(); return; }
+  if (!cfg || !cfg.SUPABASE_URL || !window.supabase) {
+    loadCache();
+    state.ready = true;
+    emit();
+    return;
+  }
   sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
 
+  // Sans session, rien n'est affiché, pas même la copie locale.
+  const { data } = await sb.auth.getSession();
+  if (!data.session) { showLogin(); return; }
+  state.user = data.session.user.email;
+  loadCache();
+  listeners.forEach(fn => fn());
+  await loadRemote();
+
+  sb.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') showLogin();
+  });
+}
+
+function showLogin() {
+  state.needsLogin = true;
+  state.user = null;
+  state.tasks = [];
+  state.ideas = [];
+  state.ready = true;
+  try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+  listeners.forEach(fn => fn());
+}
+
+// --- Connexion par code à 6 chiffres reçu par mail ---
+
+export async function sendLoginCode(email) {
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+  return error ? error.message : null;
+}
+
+export async function verifyLoginCode(email, code) {
+  const { data, error } = await sb.auth.verifyOtp({ email, token: code, type: 'email' });
+  if (error) return error.message;
+  state.needsLogin = false;
+  state.user = data.user ? data.user.email : email;
+  state.ready = false;
+  listeners.forEach(fn => fn());
+  await loadRemote();
+  return null;
+}
+
+export async function signOut() {
+  if (sb) { sb.removeAllChannels(); await sb.auth.signOut(); }
+  showLogin();
+}
+
+async function loadRemote() {
   try {
     const [tasksRes, ideasRes] = await Promise.all([
       sb.from('tasks').select('*').order('id', { ascending: true }),

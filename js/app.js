@@ -4,6 +4,7 @@ import { renderHome } from './views/home.js';
 import { renderInbox, skipTask } from './views/inbox.js';
 import { renderTasks, setFilter, toggleCollapse, toggleDoneList } from './views/tasks.js';
 import { renderIdeas } from './views/ideas.js';
+import { renderLogin, login, rememberEmail } from './views/login.js';
 import { openCapture, openEdit, closeSheet, isOpen, updateCapturePreview, openFocusMode, renderFocusMode, focusModeNext } from './sheets.js';
 import { parseQuickInput } from './parse.js';
 import { startDictation, stopDictation, isListening } from './dictation.js';
@@ -37,6 +38,13 @@ function go(view) {
 function render() {
   if (dragging) { pendingRender = true; return; }
   const root = document.getElementById('view');
+  const loggedOut = store.state.needsLogin;
+  document.body.classList.toggle('logged-out', loggedOut);
+  if (loggedOut) {
+    const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.login-form');
+    if (!typing) root.innerHTML = renderLogin();
+    return;
+  }
   root.innerHTML = VIEWS[current].render();
   document.querySelectorAll('[data-nav]').forEach(b => {
     const on = b.dataset.nav === current;
@@ -167,6 +175,16 @@ const actions = {
     if (!armed(el, 'Confirmer')) return;
     store.deleteIdea(Number(el.dataset.id));
   },
+  'login-back': () => {
+    login.step = 'email';
+    login.message = '';
+    document.getElementById('view').innerHTML = renderLogin();
+    document.getElementById('login-email').focus();
+  },
+  'sign-out': el => {
+    if (!armed(el, 'Confirmer la déconnexion')) return;
+    store.signOut();
+  },
   'idea-to-task': el => {
     store.ideaToTask(Number(el.dataset.id));
     toast('L\'idée est devenue une tâche, à trier.', 'good');
@@ -200,6 +218,9 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   stopDictation();
   const data = new FormData(form);
+
+  if (form.dataset.form === 'login-email') { submitLoginEmail(String(data.get('email') || '').trim().toLowerCase()); return; }
+  if (form.dataset.form === 'login-code') { submitLoginCode(String(data.get('code') || '').replace(/\D/g, '')); return; }
 
   if (form.dataset.form === 'capture') {
     const raw = String(data.get('text') || '').trim();
@@ -246,6 +267,48 @@ document.addEventListener('submit', e => {
     closeSheet();
   }
 });
+
+function showLoginScreen(focusId) {
+  document.getElementById('view').innerHTML = renderLogin();
+  const el = document.getElementById(focusId);
+  if (el) el.focus();
+}
+
+async function submitLoginEmail(email) {
+  if (!email) return;
+  login.email = email;
+  login.busy = true;
+  login.message = '';
+  showLoginScreen('login-email');
+  const err = await store.sendLoginCode(email);
+  login.busy = false;
+  if (err) {
+    login.message = /rate|seconds/i.test(err)
+      ? 'Un code vient déjà d\'être envoyé. Patiente une minute avant d\'en redemander un.'
+      : 'L\'envoi du code a échoué. Vérifie l\'adresse et réessaie.';
+    showLoginScreen('login-email');
+    return;
+  }
+  rememberEmail(email);
+  login.step = 'code';
+  showLoginScreen('login-code');
+}
+
+async function submitLoginCode(code) {
+  if (code.length !== 6) { login.message = 'Le code fait 6 chiffres.'; showLoginScreen('login-code'); return; }
+  login.busy = true;
+  login.message = '';
+  showLoginScreen('login-code');
+  const err = await store.verifyLoginCode(login.email, code);
+  login.busy = false;
+  if (err) {
+    login.message = 'Code incorrect ou expiré. Vérifie le dernier mail reçu, ou demande un nouveau code.';
+    showLoginScreen('login-code');
+    return;
+  }
+  login.step = 'email';
+  go('home');
+}
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && isOpen()) { stopDictation(); closeSheet(); }
