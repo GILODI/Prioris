@@ -10,7 +10,8 @@ Dossier du projet : `C:\Users\communication\Documents\Claude\Artifacts\todolist-
 ## Règles absolues
 
 - Ne jamais modifier les classeurs Excel (le script les lit sur une copie temporaire).
-- Ne jamais afficher, lire à voix haute ni recopier le contenu du fichier `.env` (clé secrète).
+- Ne jamais afficher ni recopier le contenu du fichier `.env` (il contient le jeton de
+  synchronisation). Les scripts le lisent eux-mêmes.
 - Ne rien supprimer, ni dans Supabase ni sur le disque, en dehors du dossier `sync\out`.
 - Si un script échoue, rapporter le message d'erreur tel quel et s'arrêter.
 

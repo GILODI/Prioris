@@ -7,14 +7,24 @@ comprend son métier et son outil, pas le jargon technique.
 
 ## Ce qu'est ce projet
 
-- **Une page statique, sans build ni framework.** Tout tient dans
-  `index.html` (~33 Ko) : structure, styles et logique. Pas de `npm install`,
-  pas d'étape de compilation. On ouvre le fichier, on modifie, c'est tout.
+- **Un site statique, sans build ni framework.** `index.html` charge
+  `css/app.css` et des modules JavaScript natifs dans `js/` (un fichier par
+  écran dans `js/views/`). Pas de `npm install`, pas d'étape de compilation.
 - **Déployée sur Vercel** depuis GitHub (`GILODI/Prioris`), à chaque push sur
-  la branche principale.
-- **Données dans Supabase**, une seule table `tasks` (voir
-  `supabase_schema.sql`), avec le temps réel activé pour synchroniser
-  plusieurs appareils.
+  la branche principale. Chaque branche a aussi son lien d'aperçu.
+- **Données dans Supabase** : `tasks` (tâches), `ideas` (boîte à idées),
+  `inbox_items` (mails et messages WhatsApp à trier), avec le temps réel
+  activé pour synchroniser plusieurs appareils. Les migrations sont dans
+  `sql/`, dans l'ordre de leur date.
+- **Connexion obligatoire** (adresse + mot de passe, compte créé dans
+  Supabase > Authentication > Users). Sans session, l'application n'affiche
+  rien.
+- **Synchronisation des messages** : `sync/` contient les scripts qui lisent
+  les classeurs Excel « Traitement des mails 2026 » et « Suivi WhatsApp »
+  (OneDrive) et la procédure `sync/SYNC.md`, suivie par la tâche Claude
+  « Synchroniser Prioris » lancée à la main. Elle écrit via deux fonctions
+  protégées par un jeton (`SUPABASE_IMPORT_TOKEN` dans `.env`, jamais
+  publié), sans clé `service_role`.
 - **Installable** sur téléphone (PWA) : `manifest.json` + `sw.js`.
 - `versions/` contient d'anciennes versions HTML datées, antérieures au
   renommage en « Prioris ». C'est de l'historique : ne rien y modifier, ne
@@ -52,13 +62,12 @@ D'où le `Cache-Control: no-store` dans `vercel.json` et le service worker en
 service worker, comprendre cet historique** — et tester sur un appareil réel,
 pas seulement en navigation privée.
 
-**Accès à la base, ouvert et assumé.** La policy `"Accès complet anon"` donne
-un accès complet en lecture et écriture à quiconque possède l'URL et la clé
-publique — toutes deux servies au navigateur. C'est documenté et accepté pour
-un usage strictement personnel. **À revoir impérativement** si la liste doit
-être partagée, si des données sensibles y entrent, ou si l'application devient
-publique. Ne pas « corriger » ce point de sa propre initiative : en parler à
-Alex d'abord, c'est un choix, pas un oubli.
+**Accès à la base, réservé au compte d'Alex.** Depuis la v2 (octobre 2026,
+`sql/2026-10-etape2-verrouillage.sql`), l'ancienne policy `"Accès complet anon"` est
+remplacée par `"Compte Prioris uniquement"` : seul le compte
+`communication@campfrance.fr` connecté lit et écrit. Décidé avec Alex quand
+les mails sont entrés dans l'application. La clé publique ne donne plus accès
+qu'aux deux fonctions de synchronisation, et seulement avec le jeton.
 
 **`config.js` est commité** alors que `config.example.js` affirme qu'il est
 ignoré par git. Ce n'est pas une fuite (il ne contient que des clés

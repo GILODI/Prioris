@@ -1,8 +1,9 @@
-﻿# Échanges avec Supabase pour la synchronisation, avec la clé secrète du fichier .env local.
-# La clé n'est jamais affichée.
-#   -Action check   : vérifie la connexion
+﻿# Échanges avec Supabase pour la synchronisation.
+# Utilise la clé publique et le jeton de synchronisation du fichier .env local : le jeton permet
+# seulement de lister les messages déjà importés et d'en ajouter. Il n'est jamais affiché.
+#   -Action check   : vérifie la connexion et le jeton
 #   -Action keys    : écrit la liste des messages déjà importés (source_key) dans -Out
-#   -Action insert  : envoie les messages de -File (tableau JSON) dans la table inbox_items
+#   -Action insert  : envoie les messages de -File (tableau JSON) dans « À trier »
 param(
   [ValidateSet('check', 'keys', 'insert')][string]$Action = 'check',
   [string]$File,
@@ -17,11 +18,12 @@ foreach ($line in Get-Content -Encoding UTF8 $envFile) {
   if ($line -match '^\s*([A-Z_]+)\s*=\s*(.*)\s*$') { $cfg[$Matches[1]] = $Matches[2].Trim() }
 }
 $url = $cfg['SUPABASE_URL']
-$key = $cfg['SUPABASE_SECRET_KEY']
-if (-not $url) { throw 'SUPABASE_URL manquant dans .env' }
-if (-not $key) { throw 'SUPABASE_SECRET_KEY manquant dans .env : colle la clé secrète Supabase (Settings > API Keys > Secret keys).' }
+$key = $cfg['SUPABASE_ANON_KEY']
+$token = $cfg['SUPABASE_IMPORT_TOKEN']
+if (-not $url -or -not $key) { throw 'SUPABASE_URL ou SUPABASE_ANON_KEY manquant dans .env' }
+if (-not $token) { throw 'SUPABASE_IMPORT_TOKEN manquant dans .env' }
 $headers = @{ apikey = $key; Authorization = "Bearer $key" }
-$base = "$url/rest/v1"
+$rpc = "$url/rest/v1/rpc"
 
 function Write-Utf8([string]$path, [string]$text) {
   $dir = Split-Path $path
@@ -29,47 +31,47 @@ function Write-Utf8([string]$path, [string]$text) {
   [System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding($false)))
 }
 
+function Call-Rpc([string]$name, $payload) {
+  $body = [System.Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -InputObject $payload -Depth 5 -Compress))
+  try {
+    return Invoke-RestMethod -Method Post -Uri "$rpc/$name" -Headers $headers -Body $body -ContentType 'application/json; charset=utf-8'
+  } catch {
+    $msg = $_.ErrorDetails.Message
+    if (-not $msg) { $msg = $_.Exception.Message }
+    throw "Supabase a refusé l'appel $name : $msg"
+  }
+}
+
 switch ($Action) {
   'check' {
-    $r = Invoke-RestMethod -Method Get -Uri "$base/inbox_items?select=id&limit=1" -Headers $headers
-    Write-Output 'Connexion à Supabase : OK (table inbox_items accessible).'
+    $keys = @(Call-Rpc 'prioris_import_keys' @{ p_token = $token })
+    Write-Output ("Connexion à Supabase : OK. {0} messages déjà importés." -f $keys.Count)
   }
   'keys' {
-    $all = @()
-    $offset = 0
-    do {
-      $page = Invoke-RestMethod -Method Get -Uri "$base/inbox_items?select=source_key&order=id&limit=1000&offset=$offset" -Headers $headers
-      $page = @($page)
-      $all += $page | ForEach-Object { $_.source_key }
-      $offset += 1000
-    } while ($page.Count -eq 1000)
-    Write-Utf8 $Out (ConvertTo-Json -InputObject @($all))
-    Write-Output ("{0} messages déjà importés -> {1}" -f $all.Count, $Out)
+    $keys = @(Call-Rpc 'prioris_import_keys' @{ p_token = $token })
+    Write-Utf8 $Out (ConvertTo-Json -InputObject @($keys))
+    Write-Output ("{0} messages déjà importés -> {1}" -f $keys.Count, $Out)
   }
   'insert' {
     if (-not $File -or -not (Test-Path $File)) { throw "Fichier à envoyer introuvable : $File" }
     $allowed = 'source', 'source_key', 'received_on', 'sender', 'subject', 'summary', 'proposed_action',
                'proposed_priority', 'proposed_due', 'draft_reply', 'urgent', 'urgency_reason', 'needs_action'
     $items = @(Get-Content -Raw -Encoding UTF8 $File | ConvertFrom-Json)
-    $rows = foreach ($it in $items) {
+    $rows = @(foreach ($it in $items) {
       $row = [ordered]@{}
       foreach ($k in $allowed) {
         $v = $it.$k
-        if ($k -in 'received_on', 'proposed_due' -and -not $v) { $v = $null }
+        if ($k -in 'received_on', 'proposed_due' -and -not ($v -match '^\d{4}-\d{2}-\d{2}$')) { $v = $null }
         if ($k -eq 'proposed_priority' -and ($v -eq '' -or $v -eq $null)) { $v = $null }
         $row[$k] = $v
       }
       [pscustomobject]$row
-    }
-    $sent = 0
+    })
+    $added = 0
     for ($i = 0; $i -lt $rows.Count; $i += 50) {
       $batch = @($rows[$i..([Math]::Min($i + 49, $rows.Count - 1))])
-      $body = [System.Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -InputObject $batch -Depth 3))
-      $h = $headers.Clone()
-      $h['Prefer'] = 'resolution=ignore-duplicates,return=minimal'
-      Invoke-RestMethod -Method Post -Uri "$base/inbox_items?on_conflict=source_key" -Headers $h -Body $body -ContentType 'application/json; charset=utf-8' | Out-Null
-      $sent += $batch.Count
+      $added += [int](Call-Rpc 'prioris_import' @{ p_token = $token; p_items = $batch })
     }
-    Write-Output ("{0} messages envoyés à Prioris." -f $sent)
+    Write-Output ("{0} messages envoyés, {1} nouveaux ajoutés à Prioris (les autres y étaient déjà)." -f $rows.Count, $added)
   }
 }
