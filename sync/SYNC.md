@@ -54,8 +54,8 @@ Pour chaque message retenu, produire un objet avec exactement ces champs :
 | `proposed_priority` | 0 = vite fait (moins de 5 min : confirmer, transférer, répondre en deux lignes), 1 = urgent, 2 = cette semaine, 3 = file d'attente / plus tard, 4 = perso. `null` si `needs_action` est `false`. |
 | `proposed_due` | AAAA-MM-JJ seulement si le message cite une date limite explicite, sinon `null`. |
 | `draft_reply` | Si une réponse est attendue : reprendre `excel_reply` s'il existe, sinon rédiger une réponse courte, prête à envoyer, en français, ton professionnel parlé, signée « Alex ». Reprendre le tutoiement ou le vouvoiement de l'expéditeur. Pour WhatsApp, pas de formule d'en-tête. Ne jamais inventer d'engagement (date, prix, quantité) : écrire `[à compléter]` à la place. Vide si aucune réponse n'est attendue. |
-| `urgent` | `true` si au moins un critère : `excel_status` contient « urgence » ; `excel_priority` vaut « Haute » ; échéance aujourd'hui, demain ou dépassée ; relance ou deuxième demande ; sujet bloqué depuis plus de 10 jours ; paiement, facture ou contrat bloqué ; demande de la maison-mère (HQ Italie) ou de la direction. Sinon `false`. Appliquer ces critères aussi aux messages anciens : c'est ce qui permet de rattraper une urgence passée inaperçue. |
-| `urgency_reason` | Si `urgent` : la raison en quelques mots (« relance, en attente depuis 20 jours »). Sinon vide. |
+| `urgent` | `true` uniquement si `excel_status` contient « urgence » (marqué « à traiter en urgence » dans le suivi Excel). Sinon `false`. Règle volontairement stricte, choisie par Alex : trop d'urgents rendent le mot inutile. Ne pas marquer urgent pour une relance, un sujet ancien ou un expéditeur important. L'urgence liée à une échéance (dépassée ou dans les 2 jours) est calculée par l'application à partir de `proposed_due` : ne pas la reporter ici. |
+| `urgency_reason` | Si `urgent` : « marqué à traiter en urgence dans ton suivi », complété si utile par le motif en quelques mots. Sinon vide. |
 
 Respecter l'orthographe « C.A.M.P. » et ne pas utiliser « on ».
 

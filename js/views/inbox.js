@@ -4,7 +4,7 @@
 // Quatre files : À traiter (urgents + 7 derniers jours + tâches sans catégorie),
 // Plus anciens, Pour info, Historique (messages déjà traités).
 import { state, sortForZone } from '../store.js';
-import { shortDateTime, addDays, today, dueLabel, agoLabel } from '../dates.js';
+import { shortDateTime, addDays, today, dueLabel, agoLabel, daysUntil } from '../dates.js';
 import { esc, ZONES, zoneOf, dueChip, waitingChip } from '../ui.js';
 import { normWord } from '../parse.js';
 
@@ -29,10 +29,22 @@ export function skipItem(key) { if (!skipped.includes(key)) skipped.push(key); }
 function byDateDesc(a, b) { return (b.receivedOn || '').localeCompare(a.receivedOn || ''); }
 const msg = i => ({ kind: 'msg', key: 'm' + i.id, item: i });
 
+// Urgence : marquée à la synchronisation (« à traiter en urgence » dans le suivi Excel),
+// ou calculée ici d'après l'échéance (dépassée ou dans les 2 jours), pour qu'un message
+// devienne urgent tout seul quand sa date approche.
+function withUrgency(i) {
+  if (i.urgent) return i;
+  const n = daysUntil(i.due);
+  if (i.due && n !== null && n <= 2) {
+    return { ...i, urgent: true, urgencyReason: n < 0 ? 'échéance dépassée' : `échéance ${dueLabel(i.due)}` };
+  }
+  return i;
+}
+
 // Files d'attente, filtrées par source. Les tâches sans catégorie n'apparaissent qu'avec « Tout ».
 export function queues(source = 'all') {
   const cut = addDays(today(), -7);
-  const messages = state.inbox.filter(i => source === 'all' || i.source === source);
+  const messages = state.inbox.filter(i => source === 'all' || i.source === source).map(withUrgency);
   const recent = i => !i.receivedOn || i.receivedOn >= cut;
   const main = messages.filter(i => i.needsAction && (i.urgent || recent(i)))
     .sort((a, b) => (b.urgent - a.urgent) || byDateDesc(a, b)).map(msg);

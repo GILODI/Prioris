@@ -1,4 +1,4 @@
-const CACHE = 'prioris-v7';
+const CACHE = 'prioris-v8';
 const ASSETS = [
   './', './index.html', './config.js', './manifest.json', './icon-192.png', './icon-512.png',
   './css/app.css', './js/app.js', './js/store.js', './js/parse.js', './js/dictation.js',
