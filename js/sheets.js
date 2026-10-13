@@ -1,6 +1,6 @@
 // Fenêtres par-dessus l'écran : ajout rapide (+), modification d'une tâche,
 // et mode « une chose à la fois ».
-import { getTask, activeFocus } from './store.js';
+import { state, getTask, activeFocus } from './store.js';
 import { parseQuickInput } from './parse.js';
 import { esc, ZONES, zoneOf, ICONS, dueChip } from './ui.js';
 import { today } from './dates.js';
@@ -24,6 +24,15 @@ export function closeSheet() {
   if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
 }
 
+// --- Fenêtre libre (ex. un message ouvert depuis la liste) ---
+
+export function openHtmlSheet(innerHtml, label) {
+  open(`<div class="sheet item-sheet" role="dialog" aria-modal="true" aria-label="${esc(label)}">
+    ${innerHtml}
+    <div class="sheet-actions"><span class="spacer"></span><button class="btn ghost" data-action="close-sheet">Fermer</button></div>
+  </div>`, '[data-action="close-sheet"]');
+}
+
 // --- Ajout rapide : tâche ou idée ---
 
 export function openCapture(mode = 'task') {
@@ -34,13 +43,18 @@ export function openCapture(mode = 'task') {
       <button type="button" role="tab" aria-selected="${mode === 'task'}" class="${mode === 'task' ? 'on' : ''}" data-action="capture-mode" data-mode="task">Tâche</button>
       <button type="button" role="tab" aria-selected="${mode === 'idea'}" class="${mode === 'idea' ? 'on' : ''}" data-action="capture-mode" data-mode="idea">Idée</button>
     </div>
+    ${mode === 'task' ? `
+    <label class="field">Contact <span class="optional">facultatif</span>
+      <input id="capture-contact" name="c" type="text" list="contacts-list" autocomplete="off" placeholder="Commence à taper : Arnaud, Intersport…">
+    </label>
+    ${contactsDatalist()}` : ''}
     <div class="field-row">
-      <input id="capture-input" name="text" type="text" autocomplete="off"
-        placeholder="${mode === 'task' ? 'Arnaud, rappeler pour le devis, urgent' : 'Ton idée, en quelques mots'}">
+      <input id="capture-input" name="text" type="text" autocomplete="off" aria-label="${mode === 'task' ? 'Action' : 'Idée'}"
+        placeholder="${mode === 'task' ? 'Action : rappeler pour le devis, urgent' : 'Ton idée, en quelques mots'}">
       <button type="button" class="mic" id="capture-mic" data-action="mic" data-target="capture-input" aria-label="Dicter">${ICONS.mic}</button>
     </div>
     ${mode === 'task' ? `
-    <p class="hint">Dicte « contact <b>virgule</b> action <b>virgule</b> importance ». Dis « étoile » pour surligner en rouge.</p>
+    <p class="hint">Dicte « action <b>virgule</b> importance ». Si le champ Contact est vide, tu peux aussi dicter « contact <b>virgule</b> action <b>virgule</b> importance ». Dis « étoile » pour surligner en rouge.</p>
     <p class="preview" id="capture-preview" aria-live="polite"></p>
     <fieldset class="choice">
       <legend>Catégorie</legend>
@@ -54,8 +68,26 @@ export function openCapture(mode = 'task') {
       <button type="button" class="btn ghost" data-action="close-sheet">Annuler</button>
       <button type="submit" class="btn primary">Ajouter</button>
     </div>
-  </form>`, '#capture-input');
+  </form>`, mode === 'task' ? '#capture-contact' : '#capture-input');
   updateCapturePreview();
+}
+
+// Contacts déjà connus (tâches et expéditeurs des messages), proposés pendant la saisie.
+function contactsDatalist() {
+  const names = new Set();
+  state.tasks.forEach(t => { if (t.c) names.add(t.c.trim()); });
+  state.inbox.forEach(m => { if (m.sender) names.add(m.sender.trim()); });
+  const sorted = [...names].filter(Boolean).sort((a, b) => a.localeCompare(b, 'fr'));
+  return `<datalist id="contacts-list">${sorted.map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>`;
+}
+
+// Découpe la saisie en tenant compte du champ Contact : s'il est rempli, il l'emporte et
+// tout le texte dicté devient l'action (rien n'est perdu).
+export function readCapture(raw, contactField) {
+  const parsed = parseQuickInput(raw);
+  const contact = (contactField || '').trim();
+  if (!contact) return parsed;
+  return { ...parsed, c: contact, t: [parsed.c, parsed.t].filter(Boolean).join(', ') };
 }
 
 export function updateCapturePreview() {
@@ -63,8 +95,9 @@ export function updateCapturePreview() {
   const input = document.getElementById('capture-input');
   if (!out || !input) return;
   const raw = input.value.trim();
+  const contactEl = document.getElementById('capture-contact');
   if (!raw) { out.textContent = ''; return; }
-  const { c, t, p, star } = parseQuickInput(raw);
+  const { c, t, p, star } = readCapture(raw, contactEl ? contactEl.value : '');
   const parts = [];
   if (c) parts.push(`Contact : ${c}`);
   parts.push(`Action : ${t || '—'}`);
@@ -81,7 +114,8 @@ export function openEdit(id) {
   open(`
   <form class="sheet" data-form="edit" data-id="${t.id}" role="dialog" aria-modal="true" aria-labelledby="edit-title">
     <h2 id="edit-title">Modifier la tâche</h2>
-    <label class="field">Contact <input name="c" type="text" value="${esc(t.c)}" autocomplete="off"></label>
+    <label class="field">Contact <input name="c" type="text" value="${esc(t.c)}" list="contacts-list" autocomplete="off"></label>
+    ${contactsDatalist()}
     <label class="field">Action <textarea name="t" rows="2">${esc(t.t)}</textarea></label>
     <fieldset class="choice">
       <legend>Catégorie</legend>

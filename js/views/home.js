@@ -13,7 +13,7 @@ export function renderHome() {
 
   const open = state.tasks.filter(t => !t.done);
   const toSort = open.filter(t => t.p === null && !t.waiting);
-  const q = queues();
+  const q = queues('all');
   const mainMessages = q.main.filter(e => e.kind === 'msg').map(e => e.item);
   const mails = mainMessages.filter(m => m.source === 'mail').length;
   const whatsapp = mainMessages.filter(m => m.source === 'whatsapp').length;

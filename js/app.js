@@ -1,12 +1,11 @@
 // Point d'entrée : navigation entre les écrans, actions, ajout rapide, messages.
 import * as store from './store.js';
 import { renderHome } from './views/home.js';
-import { renderInbox, skipItem, setInboxTab, queues } from './views/inbox.js';
+import { renderInbox, skipItem, setInboxTab, setInboxMode, setInboxSource, setInboxSearch, refreshInboxList, entrySheetHtml, queues } from './views/inbox.js';
 import { renderTasks, setFilter, toggleCollapse, toggleDoneList } from './views/tasks.js';
 import { renderIdeas } from './views/ideas.js';
 import { renderLogin, login, rememberEmail } from './views/login.js';
-import { openCapture, openEdit, closeSheet, isOpen, updateCapturePreview, openFocusMode, renderFocusMode, focusModeNext } from './sheets.js';
-import { parseQuickInput } from './parse.js';
+import { openCapture, openEdit, closeSheet, isOpen, updateCapturePreview, openFocusMode, renderFocusMode, focusModeNext, readCapture, openHtmlSheet } from './sheets.js';
 import { startDictation, stopDictation, isListening } from './dictation.js';
 import { today } from './dates.js';
 
@@ -45,14 +44,17 @@ function render() {
     if (!typing) root.innerHTML = renderLogin();
     return;
   }
-  root.innerHTML = VIEWS[current].render();
+  // Pendant une recherche dans la liste, on ne met à jour que la liste pour garder la saisie.
+  const searching = current === 'inbox' && document.activeElement && document.activeElement.id === 'inbox-search';
+  if (searching) refreshInboxList();
+  else root.innerHTML = VIEWS[current].render();
   document.querySelectorAll('[data-nav]').forEach(b => {
     const on = b.dataset.nav === current;
     b.classList.toggle('on', on);
     if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   const badge = document.getElementById('inbox-badge');
-  const n = queues().main.length;
+  const n = queues('all').main.length;
   if (badge) { badge.textContent = n; badge.hidden = n === 0; }
   initSortables();
 }
@@ -138,7 +140,8 @@ const actions = {
   'capture': el => openCapture(el.dataset.mode || 'task'),
   'capture-mode': el => {
     const input = document.getElementById('capture-input');
-    const text = input ? input.value : '';
+    const contact = document.getElementById('capture-contact');
+    const text = [contact ? contact.value.trim() : '', input ? input.value.trim() : ''].filter(Boolean).join(', ');
     stopDictation();
     openCapture(el.dataset.mode);
     const next = document.getElementById('capture-input');
@@ -176,16 +179,37 @@ const actions = {
   },
   'triage-wait': el => { store.updateTask(Number(el.dataset.id), { waiting: true }); toast('Mise en attente.'); },
   'triage-skip': el => { skipItem(el.dataset.key); render(); },
-  'inbox-tab': el => { setInboxTab(el.dataset.tab); render(); },
+  'inbox-tab': el => {
+    setInboxTab(el.dataset.tab);
+    render();
+    if (el.dataset.tab === 'history' && store.state.inboxHistory === null) store.loadInboxHistory();
+  },
+  'inbox-source': el => { setInboxSource(el.dataset.source); render(); },
+  'inbox-mode': el => { setInboxMode(el.dataset.mode); render(); },
+  'open-entry': el => {
+    const html = entrySheetHtml(el.dataset.key);
+    if (html) openHtmlSheet(html, 'Message');
+  },
   'inbox-task': el => {
     store.inboxToTask(Number(el.dataset.id), { p: Number(el.dataset.p) });
+    if (isOpen()) closeSheet();
     toast('Tâche créée.', 'good');
   },
   'inbox-wait': el => {
     store.inboxToTask(Number(el.dataset.id), { p: Number(el.dataset.p), waiting: true });
+    if (isOpen()) closeSheet();
     toast('Tâche créée, en attente de réponse.', 'good');
   },
-  'inbox-ignore': el => { store.ignoreInbox(Number(el.dataset.id)); toast('Classé sans tâche.'); },
+  'inbox-ignore': el => {
+    store.ignoreInbox(Number(el.dataset.id));
+    if (isOpen()) closeSheet();
+    toast('Classé sans tâche.');
+  },
+  'inbox-restore': el => {
+    store.restoreInbox(Number(el.dataset.id));
+    if (isOpen()) closeSheet();
+    toast('Remis à trier.', 'good');
+  },
   'copy-draft': el => {
     const src = document.getElementById(el.dataset.target);
     if (!src) return;
@@ -231,7 +255,8 @@ document.addEventListener('change', e => {
 });
 
 document.addEventListener('input', e => {
-  if (e.target.id === 'capture-input') updateCapturePreview();
+  if (e.target.id === 'capture-input' || e.target.id === 'capture-contact') updateCapturePreview();
+  if (e.target.id === 'inbox-search') { setInboxSearch(e.target.value); refreshInboxList(); }
 });
 
 document.addEventListener('submit', e => {
@@ -255,7 +280,7 @@ document.addEventListener('submit', e => {
       toast('Idée enregistrée.', 'good');
       return;
     }
-    const parsed = parseQuickInput(raw);
+    const parsed = readCapture(raw, String(data.get('c') || ''));
     if (!parsed.c && !parsed.t) { toast('Il manque l\'action.'); return; }
     const choice = String(data.get('p') || 'auto');
     const p = choice === 'auto' ? parsed.p : choice === 'null' ? null : Number(choice);

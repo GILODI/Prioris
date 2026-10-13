@@ -9,6 +9,7 @@ export const state = {
   ideas: [],
   inbox: [],              // messages (mails, WhatsApp) importés, pas encore traités
   inboxAvailable: true,   // false tant que la table "inbox_items" n'existe pas
+  inboxHistory: null,     // messages déjà traités, chargés seulement à l'ouverture de l'historique
   ready: false,
   online: false,
   needsLogin: false,
@@ -109,6 +110,7 @@ function showLogin() {
   state.tasks = [];
   state.ideas = [];
   state.inbox = [];
+  state.inboxHistory = null;
   state.ready = true;
   try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
   listeners.forEach(fn => fn());
@@ -183,7 +185,9 @@ function listenRealtime() {
       const row = payload.new && payload.new.id ? payload.new : null;
       const id = row ? row.id : payload.old.id;
       state.inbox = state.inbox.filter(x => x.id !== id);
+      if (state.inboxHistory) state.inboxHistory = state.inboxHistory.filter(x => x.id !== id);
       if (row && row.status === 'new') state.inbox.push(inboxFromRow(row));
+      else if (row && state.inboxHistory) state.inboxHistory.unshift(inboxFromRow(row));
       emit();
     })
     .subscribe();
@@ -218,8 +222,10 @@ export async function createTask({ p = null, c = '', t = '', star = false, due =
 
 // --- Messages à trier ---
 
-function setInboxStatus(id, fields) {
+function setInboxStatus(id, fields, known = null) {
+  const item = known || state.inbox.find(x => x.id === id);
   state.inbox = state.inbox.filter(x => x.id !== id);
+  if (item && state.inboxHistory) state.inboxHistory.unshift({ ...item, status: fields.status });
   emit();
   if (!sb) return;
   sb.from('inbox_items').update(fields).eq('id', id)
@@ -235,10 +241,33 @@ export async function inboxToTask(id, { p, waiting = false }) {
     p, c: item.sender, t: item.action || item.summary, star: item.urgent,
     due: item.due, source: item.source, waiting,
   });
-  setInboxStatus(id, { status: 'task', task_id: task && task.id > 0 ? task.id : null });
+  setInboxStatus(id, { status: 'task', task_id: task && task.id > 0 ? task.id : null }, item);
 }
 
 export function ignoreInbox(id) { setInboxStatus(id, { status: 'ignored' }); }
+
+// --- Historique : messages déjà traités (chargés à la demande) ---
+
+export async function loadInboxHistory() {
+  if (!sb) { state.inboxHistory = []; return; }
+  const { data, error } = await sb.from('inbox_items').select('*').neq('status', 'new')
+    .order('received_on', { ascending: false }).limit(1000);
+  if (error) { report(error, 'L\'historique des messages n\'a pas pu être chargé.'); return; }
+  state.inboxHistory = data.map(inboxFromRow);
+  emit();
+}
+
+// Remet un message déjà traité dans « À trier » (rien n'est effacé, la tâche éventuelle reste).
+export function restoreInbox(id) {
+  const item = (state.inboxHistory || []).find(x => x.id === id);
+  if (!item) return;
+  state.inboxHistory = state.inboxHistory.filter(x => x.id !== id);
+  state.inbox.push({ ...item, status: 'new' });
+  emit();
+  if (!sb) return;
+  sb.from('inbox_items').update({ status: 'new' }).eq('id', id)
+    .then(({ error }) => { if (error) report(error, 'Le message n\'a pas pu être remis à trier.'); });
+}
 
 export function updateTask(id, fields) {
   const task = getTask(id);
