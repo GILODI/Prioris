@@ -44,11 +44,11 @@ function Call-Rpc([string]$name, $payload) {
 
 switch ($Action) {
   'check' {
-    $keys = @(Call-Rpc 'prioris_import_keys' @{ p_token = $token })
+    $keys = @(Call-Rpc 'prioris_import_keys' @{ p_token = $token } | ForEach-Object { $_ } | Where-Object { $_ })
     Write-Output ("Connexion à Supabase : OK. {0} messages déjà importés." -f $keys.Count)
   }
   'keys' {
-    $keys = @(Call-Rpc 'prioris_import_keys' @{ p_token = $token })
+    $keys = @(Call-Rpc 'prioris_import_keys' @{ p_token = $token } | ForEach-Object { $_ } | Where-Object { $_ })
     Write-Utf8 $Out (ConvertTo-Json -InputObject @($keys))
     Write-Output ("{0} messages déjà importés -> {1}" -f $keys.Count, $Out)
   }
