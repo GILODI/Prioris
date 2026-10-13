@@ -37,6 +37,13 @@ function Call-Rpc([string]$name, $payload) {
     return Invoke-RestMethod -Method Post -Uri "$rpc/$name" -Headers $headers -Body $body -ContentType 'application/json; charset=utf-8'
   } catch {
     $msg = $_.ErrorDetails.Message
+    # Windows PowerShell 5.1 laisse souvent ErrorDetails vide : lire la réponse de Supabase
+    if (-not $msg -and $_.Exception.Response) {
+      try {
+        $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream(), [System.Text.Encoding]::UTF8)
+        $msg = $reader.ReadToEnd()
+      } catch { }
+    }
     if (-not $msg) { $msg = $_.Exception.Message }
     throw "Supabase a refusé l'appel $name : $msg"
   }
@@ -56,13 +63,16 @@ switch ($Action) {
     if (-not $File -or -not (Test-Path $File)) { throw "Fichier à envoyer introuvable : $File" }
     $allowed = 'source', 'source_key', 'received_on', 'sender', 'subject', 'summary', 'proposed_action',
                'proposed_priority', 'proposed_due', 'draft_reply', 'urgent', 'urgency_reason', 'needs_action'
-    $items = @(Get-Content -Raw -Encoding UTF8 $File | ConvertFrom-Json)
+    # Windows PowerShell 5.1 renvoie le tableau JSON comme un seul objet : le déplier élément par élément
+    $parsed = ConvertFrom-Json -InputObject (Get-Content -Raw -Encoding UTF8 $File)
+    $items = @($parsed | ForEach-Object { $_ })
     $rows = @(foreach ($it in $items) {
       $row = [ordered]@{}
       foreach ($k in $allowed) {
         $v = $it.$k
         if ($k -in 'received_on', 'proposed_due' -and -not ($v -match '^\d{4}-\d{2}-\d{2}$')) { $v = $null }
-        if ($k -eq 'proposed_priority' -and ($v -eq '' -or $v -eq $null)) { $v = $null }
+        # Attention : en PowerShell « 0 -eq '' » est vrai, d'où le test sur le type (0 = vite fait)
+        if ($k -eq 'proposed_priority' -and ($null -eq $v -or ($v -is [string] -and $v.Trim() -eq ''))) { $v = $null }
         $row[$k] = $v
       }
       [pscustomobject]$row
