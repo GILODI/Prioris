@@ -69,6 +69,13 @@ remplacée par `"Compte Prioris uniquement"` : seul le compte
 les mails sont entrés dans l'application. La clé publique ne donne plus accès
 qu'aux deux fonctions de synchronisation, et seulement avec le jeton.
 
+**Avertissements attendus dans Supabase (Security Advisor).** Les fonctions
+`prioris_*` de synchronisation sont signalées « Public Can Execute SECURITY
+DEFINER Function » : c'est voulu, elles sont appelées avec la clé publique et
+refusent tout sans le jeton. L'avertissement « Leaked Password Protection
+Disabled » concerne une option des offres payantes. Le reste a été traité par
+`sql/2026-10-avertissements-supabase.sql`.
+
 **`config.js` est commité** alors que `config.example.js` affirme qu'il est
 ignoré par git. Ce n'est pas une fuite (il ne contient que des clés
 publiques), mais l'intention initiale n'était pas celle-là.
