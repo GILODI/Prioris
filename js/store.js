@@ -18,6 +18,7 @@ export const state = {
   user: null,
   ideasAvailable: true,   // false tant que la table "ideas" n'existe pas côté Supabase
   schemaV2: true,         // false tant que les colonnes de l'étape 1 n'existent pas
+  schemaWeek: true,       // false tant que les colonnes du bilan de la semaine n'existent pas
 };
 
 let sb = null;
@@ -43,9 +44,12 @@ function report(error, message) {
 const FIELD_MAP = {
   p: 'priority', c: 'contact', t: 'text', done: 'done', star: 'star', sort: 'sort',
   due: 'due_date', waiting: 'waiting', waitingSince: 'waiting_since', focus: 'focus_date',
-  source: 'source',
+  source: 'source', doneAt: 'done_at', reviewedOn: 'reviewed_on', abandoned: 'abandoned',
 };
 const V2_FIELDS = ['due', 'waiting', 'waitingSince', 'focus'];
+// Colonnes du bilan de la semaine (sql/2026-10-bilan-archivages.sql) : tant qu'elles
+// n'existent pas, elles restent sur l'appareil sans bloquer le reste de la modification.
+const WEEK_FIELDS = ['doneAt', 'reviewedOn', 'abandoned'];
 
 function taskFromRow(r) {
   return {
@@ -53,6 +57,7 @@ function taskFromRow(r) {
     done: !!r.done, star: !!r.star, sort: r.sort ?? null,
     due: r.due_date || null, waiting: !!r.waiting, waitingSince: r.waiting_since || null,
     focus: r.focus_date || null, createdAt: r.created_at || null, source: r.source || null,
+    doneAt: r.done_at || null, reviewedOn: r.reviewed_on || null, abandoned: !!r.abandoned,
   };
 }
 
@@ -176,6 +181,7 @@ async function loadRemote() {
     if (tasksRes.error) throw tasksRes.error;
     state.tasks = tasksRes.data.map(taskFromRow);
     state.schemaV2 = tasksRes.data.length === 0 || 'focus_date' in tasksRes.data[0];
+    state.schemaWeek = tasksRes.data.length === 0 || 'done_at' in tasksRes.data[0];
     if (ideasRes.error) { state.ideasAvailable = false; state.ideas = []; }
     else { state.ideasAvailable = true; state.ideas = ideasRes.data.map(ideaFromRow); }
     state.online = true;
@@ -396,6 +402,8 @@ export function updateTask(id, fields) {
   if (!task) return;
   if (fields.waiting === true && !task.waiting) fields.waitingSince = new Date().toISOString();
   if (fields.waiting === false) fields.waitingSince = null;
+  if (fields.done === true && !task.done) fields.doneAt = new Date().toISOString();
+  if (fields.done === false) { fields.doneAt = null; fields.abandoned = false; }
   Object.assign(task, fields);
   emit();
   if (!sb || id < 0) return;
@@ -403,7 +411,15 @@ export function updateTask(id, fields) {
     report(null, 'Cette option demande la mise à jour de la base (script SQL de l\'étape 1).');
     return;
   }
-  sb.from('tasks').update(toRow(fields)).eq('id', id)
+  const remote = { ...fields };
+  if (!state.schemaWeek) {
+    WEEK_FIELDS.forEach(k => delete remote[k]);
+    if (!Object.keys(remote).length) {
+      report(null, 'Le bilan de la semaine demande la mise à jour de la base (script sql/2026-10-bilan-archivages.sql).');
+      return;
+    }
+  }
+  sb.from('tasks').update(toRow(remote)).eq('id', id)
     .then(({ error }) => { if (error) report(error, 'La modification n\'a pas été synchronisée.'); });
 }
 

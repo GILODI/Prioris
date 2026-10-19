@@ -35,6 +35,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\communication\Docu
 
 Produit `sync\out\existing-keys.json` (liste des `source_key` déjà importés).
 
+Puis récupérer les expéditeurs qu'Alex archive toujours (au moins 3 messages archivés,
+jamais transformés en tâche) :
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\communication\Documents\Claude\Artifacts\todolist-camp\sync\push.ps1" -Action archived-senders
+```
+
+Produit `sync\out\archived-senders.json` (noms en minuscules). Si la commande échoue parce que
+la fonction n'existe pas encore dans Supabase, continuer avec une liste vide et le signaler
+dans le compte rendu.
+
 ### 3. Retenir les nouveaux messages
 
 Garder les messages dont le `source_key` n'est pas dans `existing-keys.json` et dont
@@ -49,7 +60,7 @@ Pour chaque message retenu, produire un objet avec exactement ces champs :
 |---|---|
 | `source`, `source_key`, `received_on`, `sender`, `subject` | recopiés tels quels |
 | `summary` | 1 à 2 phrases en français, factuelles : qui écrit, quel sujet, quelle demande. Si `content` est déjà un résumé, le reprendre en le resserrant. Jamais de HTML. |
-| `needs_action` | `false` si le message ne demande rien : notification automatique, newsletter, accusé de réception, simple remerciement, publicité. Sinon `true`. |
+| `needs_action` | `false` si le message ne demande rien : notification automatique, newsletter, accusé de réception, simple remerciement, publicité. `false` aussi si l'expéditeur (`sender` en minuscules, sans espaces autour) figure dans `archived-senders.json` : Alex archive toujours ses messages. Exceptions, qui restent à `true` : message marqué urgent dans le suivi Excel, ou demande de sponsoring, de lots ou de visuel (étape 6). Sinon `true`. |
 | `proposed_action` | Une action courte à l'infinitif (« Répondre à Emma sur la liste matériel »). Reprendre `excel_action` s'il est pertinent. Vide si `needs_action` est `false`. |
 | `proposed_priority` | 0 = vite fait (moins de 5 min : confirmer, transférer, répondre en deux lignes), 1 = urgent, 2 = cette semaine, 3 = file d'attente / plus tard, 4 = perso. `null` si `needs_action` est `false`. |
 | `proposed_due` | AAAA-MM-JJ seulement si le message cite une date limite explicite, sinon `null`. |
@@ -128,10 +139,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\communication\Docu
 Les demandes sont envoyées **après** les messages : Prioris relie ainsi chaque demande à son
 message dans « À trier ».
 
-### 7. Rendre compte, en 6 lignes maximum
+### 7. Rendre compte, en 9 lignes maximum
 
 - nombre de messages importés (mails / WhatsApp) ;
 - nombre de demandes repérées (sponsoring / lots / visuels) ;
+- nombre de messages classés « pour info » parce que leur expéditeur est toujours archivé ;
 - nombre d'urgents, et les 3 plus urgents en une ligne chacun (expéditeur : action) ;
 - nombre de messages « pour info » ;
 - rappel : « Ouvre Prioris > À trier, puis Demandes ».

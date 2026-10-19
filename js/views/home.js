@@ -4,6 +4,7 @@ import { longDate, daysUntil, daysSince, dueLabel, shortDateTime } from '../date
 import { esc, taskRow } from '../ui.js';
 import { queues } from './inbox.js';
 import { openRequests, timing, deadlineChip, KINDS, LEAD_DAYS } from './requests.js';
+import { weekCard, weekVisible } from './week.js';
 
 function requestsCard() {
   const open = openRequests();
@@ -85,6 +86,8 @@ export function renderHome() {
     ${!focus.length && !suggestions.length ? `<p class="empty">Aucune tâche classée à proposer. Ouvre tes tâches et ajoute ce que tu veux avancer aujourd'hui depuis le menu d'une tâche.</p>` : ''}
   </section>
 
+  ${weekVisible() ? weekCard() : ''}
+
   <div class="grid2">
     <section class="card${urgentCount ? ' has-urgent' : ''}" aria-labelledby="sort-title">
       <div class="card-head"><h2 id="sort-title">À trier</h2><span class="big-num">${q.main.length}</span></div>
@@ -131,5 +134,6 @@ export function renderHome() {
       <button class="btn wide" data-action="go" data-view="ideas">Ouvrir la boîte à idées</button>
     </section>
   </div>
+  ${weekVisible() ? '' : `<p class="account"><button class="btn" data-action="week-show">Voir le bilan de la semaine</button></p>`}
   ${state.user ? `<p class="account muted small">Connecté : ${esc(state.user)} · <button class="link" data-action="sign-out">Se déconnecter</button></p>` : ''}`;
 }

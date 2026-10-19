@@ -8,7 +8,8 @@ import { renderLogin, login, rememberEmail } from './views/login.js';
 import { renderRequests, refreshRequestsList, setRequestsTab, setRequestsFilter, setRequestsSearch, requestSheetHtml, urgentRequests, replyBy, timing, kindOf } from './views/requests.js';
 import { openCapture, openEdit, closeSheet, isOpen, updateCapturePreview, openFocusMode, renderFocusMode, focusModeNext, readCapture, openHtmlSheet, openFormSheet } from './sheets.js';
 import { startDictation, stopDictation, isListening } from './dictation.js';
-import { today } from './dates.js';
+import { today, addDays, dueLabel } from './dates.js';
+import { showWeek, hideWeek, POSTPONE_DAYS } from './views/week.js';
 
 const VIEWS = {
   home: { hash: 'accueil', render: renderHome },
@@ -314,6 +315,27 @@ const actions = {
   'idea-delete': el => {
     if (!armed(el, 'Confirmer')) return;
     store.deleteIdea(Number(el.dataset.id));
+  },
+  // Bilan de la semaine
+  'week-show': () => { showWeek(); render(); },
+  'week-hide': () => { hideWeek(); render(); toast('Bilan masqué. Il reste accessible en bas de l\'accueil.'); },
+  'week-keep': el => {
+    store.updateTask(Number(el.dataset.id), { reviewedOn: today() });
+    toast('Gardée. Elle ne reviendra pas dans le bilan avant un mois.', 'good');
+  },
+  'week-postpone': el => {
+    const due = addDays(today(), POSTPONE_DAYS);
+    store.updateTask(Number(el.dataset.id), { reviewedOn: today(), due, p: 3 });
+    toast(`Reportée en file d'attente, échéance ${dueLabel(due)}.`, 'good');
+  },
+  'week-abandon': el => {
+    if (!armed(el, 'Confirmer')) return;
+    store.updateTask(Number(el.dataset.id), { done: true, abandoned: true, reviewedOn: today() });
+    toast('Abandonnée. Elle reste dans les tâches terminées, rien n\'est effacé.');
+  },
+  'week-chased': el => {
+    store.updateTask(Number(el.dataset.id), { waitingSince: new Date().toISOString() });
+    toast('Relance notée : le compteur repart de zéro.', 'good');
   },
   'sign-out': el => {
     if (!armed(el, 'Confirmer la déconnexion')) return;

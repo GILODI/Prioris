@@ -6,8 +6,9 @@
 #   -Action insert  : envoie les messages de -File (tableau JSON) dans « À trier »
 #   -Action request-keys    : écrit la liste des demandes déjà importées dans -Out
 #   -Action insert-requests : envoie les demandes de -File (tableau JSON) dans « Demandes »
+#   -Action archived-senders : écrit les expéditeurs qu'Alex archive toujours dans -Out
 param(
-  [ValidateSet('check', 'keys', 'insert', 'request-keys', 'insert-requests')][string]$Action = 'check',
+  [ValidateSet('check', 'keys', 'insert', 'request-keys', 'insert-requests', 'archived-senders')][string]$Action = 'check',
   [string]$File,
   [string]$Out = (Join-Path $PSScriptRoot 'out\existing-keys.json')
 )
@@ -91,6 +92,12 @@ switch ($Action) {
     $keys = @(Call-Rpc 'prioris_request_keys' @{ p_token = $token } | ForEach-Object { $_ } | Where-Object { $_ })
     Write-Utf8 $Out (ConvertTo-Json -InputObject @($keys))
     Write-Output ("{0} demandes déjà importées -> {1}" -f $keys.Count, $Out)
+  }
+  'archived-senders' {
+    if (-not $PSBoundParameters.ContainsKey('Out')) { $Out = Join-Path $PSScriptRoot 'out\archived-senders.json' }
+    $senders = @(Call-Rpc 'prioris_archived_senders' @{ p_token = $token } | ForEach-Object { $_ } | Where-Object { $_ })
+    Write-Utf8 $Out (ConvertTo-Json -InputObject @($senders))
+    Write-Output ("{0} expéditeurs toujours archivés -> {1}" -f $senders.Count, $Out)
   }
   'insert-requests' {
     if (-not $File -or -not (Test-Path $File)) { throw "Fichier à envoyer introuvable : $File" }
