@@ -70,9 +70,68 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\communication\Docu
 
 Un lot déjà envoyé n'est jamais renvoyé en double : la base ignore les `source_key` existants.
 
-### 6. Rendre compte, en 5 lignes maximum
+### 6. Repérer les demandes (sponsoring, lots, visuels)
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\communication\Documents\Claude\Artifacts\todolist-camp\sync\push.ps1" -Action request-keys
+```
+
+Produit `sync\out\existing-request-keys.json`.
+
+**Messages à examiner :**
+- **Rattrapage, une seule fois** : si `existing-request-keys.json` est vide, examiner
+  **tous** les messages de `messages.json`, y compris ceux dont `excel_status` est « Traité »
+  (pour constituer l'historique).
+- **Sinon** : seulement les messages retenus à l'étape 3 de cette synchronisation.
+
+Dans tous les cas, ignorer ceux dont le `source_key` est déjà dans
+`existing-request-keys.json`.
+
+**Ce qui compte comme demande** — uniquement une demande **adressée à C.A.M.P. / Alex** :
+
+| `kind` | Exemples |
+|---|---|
+| `sponsoring` | athlète, grimpeur, club ou événement qui demande un partenariat, un soutien financier ou matériel suivi, une dotation de saison pour un athlète |
+| `lots` | lots, dotations, cadeaux ou récompenses pour un événement, une compétition, un podium, une tombola |
+| `visuel` | magasin ou partenaire qui demande un visuel, un logo, une bannière, une affiche, de la PLV, un BAT, des photos produits (trade marketing) |
+
+Ne sont **pas** des demandes : un fournisseur ou partenaire qui annonce son propre soutien à un
+événement, un échange interne (R&D, collègues), une demande faite **par** C.A.M.P. à quelqu'un,
+un visuel envoyé à Alex pour validation, une newsletter. En cas de doute, ne pas créer de demande :
+Alex peut en ajouter une depuis le message.
+
+Si plusieurs messages examinés concernent la même demande (relance, suite d'échange), n'en
+garder qu'**une**, sur le message le plus ancien, et mentionner la relance dans `summary`.
+
+**Champs de chaque demande :**
+
+| Champ | Contenu |
+|---|---|
+| `kind` | `sponsoring`, `lots` ou `visuel` |
+| `source`, `source_key`, `received_on` | recopiés du message |
+| `requester` | la personne qui écrit (nom seul) |
+| `organization` | la structure : club, magasin, organisateur ; pour un athlète seul, son nom. Toujours écrit de la même façon (« Au Vieux Campeur », pas « AVC »), pour que Prioris retrouve les demandes précédentes |
+| `event_name` | nom court de l'événement ou de la saison (« Contest de Dry Tooling », « Saison 2026 »), vide sinon |
+| `event_date` | AAAA-MM-JJ si la date de l'événement est citée, sinon `null`. Pour un événement sur plusieurs jours, le premier jour |
+| `reply_by` | AAAA-MM-JJ seulement si le message cite un délai de réponse ou de livraison explicite, sinon `null` (Prioris calcule alors 15 jours avant l'événement) |
+| `ask` | ce qui est demandé, en une ligne (« 3 lots pour le podium », « bannière 1200×300 pour le site ») |
+| `summary` | 1 à 2 phrases factuelles |
+| `draft_reply` | même règle que pour les messages ; reprendre le brouillon du message s'il existe |
+| `status` | `done` si `excel_status` est « Traité », sinon `new` |
+
+Écrire les demandes dans `sync\out\new-requests-1.json` (lots de 40, comme à l'étape 5), puis :
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\communication\Documents\Claude\Artifacts\todolist-camp\sync\push.ps1" -Action insert-requests -File "<chemin du lot>"
+```
+
+Les demandes sont envoyées **après** les messages : Prioris relie ainsi chaque demande à son
+message dans « À trier ».
+
+### 7. Rendre compte, en 6 lignes maximum
 
 - nombre de messages importés (mails / WhatsApp) ;
+- nombre de demandes repérées (sponsoring / lots / visuels) ;
 - nombre d'urgents, et les 3 plus urgents en une ligne chacun (expéditeur : action) ;
 - nombre de messages « pour info » ;
-- rappel : « Ouvre Prioris > À trier ».
+- rappel : « Ouvre Prioris > À trier, puis Demandes ».

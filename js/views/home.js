@@ -3,6 +3,28 @@ import { state, focusToday, activeFocus, focusSuggestions, FOCUS_MAX } from '../
 import { longDate, daysUntil, daysSince, dueLabel, shortDateTime } from '../dates.js';
 import { esc, taskRow } from '../ui.js';
 import { queues } from './inbox.js';
+import { openRequests, timing, deadlineChip, KINDS, LEAD_DAYS } from './requests.js';
+
+function requestsCard() {
+  const open = openRequests();
+  const urgent = open.filter(r => timing(r) === 'urgent');
+  const soon = open.filter(r => timing(r) === 'urgent' || timing(r) === 'ok').slice(0, 3);
+  return `
+    <section class="card${urgent.length ? ' has-urgent' : ''}" aria-labelledby="req-title">
+      <div class="card-head"><h2 id="req-title">Demandes</h2><span class="big-num">${open.length}</span></div>
+      ${urgent.length ? `<p class="urgent-flag">${urgent.length} demande${urgent.length > 1 ? 's' : ''} à traiter d'urgence</p>` : ''}
+      <div class="counts">
+        ${KINDS.map(k => `<div><b>${open.filter(r => r.kind === k.id).length}</b><span>${esc((k.short || k.label).toLowerCase())}</span></div>`).join('')}
+      </div>
+      ${soon.length ? `<ul class="mini-list">
+        ${soon.map(r => `<li><button class="link-row" data-action="request-open" data-id="${r.id}">
+          <span>${esc(r.organization || r.requester || 'Demande')}${r.eventName ? ` · ${esc(r.eventName)}` : ''}</span>
+          ${deadlineChip(r)}
+        </button></li>`).join('')}
+      </ul>` : `<p class="empty">Aucune demande en attente. Réponse au plus tard ${LEAD_DAYS} jours avant l'événement.</p>`}
+      <button class="btn wide" data-action="go" data-view="requests">Ouvrir les demandes</button>
+    </section>`;
+}
 
 export function renderHome() {
   const focus = focusToday();
@@ -75,6 +97,8 @@ export function renderHome() {
       ${q.main.length ? `<button class="btn wide" data-action="go" data-view="inbox">Trier maintenant</button>` : '<p class="muted small">Rien à trier pour l\'instant.</p>'}
       <p class="soon">${q.older.length || q.info.length ? `Aussi : ${q.older.length} plus ancien${q.older.length > 1 ? 's' : ''}, ${q.info.length} pour info. ` : ''}Pour importer tes nouveaux messages, lance « Synchroniser Prioris » dans l'application Claude.</p>
     </section>
+
+    ${state.requestsAvailable || state.requests.length ? requestsCard() : ''}
 
     <section class="card" aria-labelledby="due-title">
       <div class="card-head"><h2 id="due-title">Échéances</h2><span class="muted small">7 jours</span></div>

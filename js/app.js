@@ -5,13 +5,15 @@ import { renderInbox, skipItem, setInboxTab, setInboxMode, setInboxSource, setIn
 import { renderTasks, setFilter, toggleCollapse, toggleDoneList } from './views/tasks.js';
 import { renderIdeas } from './views/ideas.js';
 import { renderLogin, login, rememberEmail } from './views/login.js';
-import { openCapture, openEdit, closeSheet, isOpen, updateCapturePreview, openFocusMode, renderFocusMode, focusModeNext, readCapture, openHtmlSheet } from './sheets.js';
+import { renderRequests, refreshRequestsList, setRequestsTab, setRequestsFilter, setRequestsSearch, requestSheetHtml, urgentRequests, replyBy, timing, kindOf } from './views/requests.js';
+import { openCapture, openEdit, closeSheet, isOpen, updateCapturePreview, openFocusMode, renderFocusMode, focusModeNext, readCapture, openHtmlSheet, openFormSheet } from './sheets.js';
 import { startDictation, stopDictation, isListening } from './dictation.js';
 import { today } from './dates.js';
 
 const VIEWS = {
   home: { hash: 'accueil', render: renderHome },
   inbox: { hash: 'a-trier', render: renderInbox },
+  requests: { hash: 'demandes', render: renderRequests },
   tasks: { hash: 'taches', render: renderTasks },
   ideas: { hash: 'idees', render: renderIdeas },
 };
@@ -45,8 +47,9 @@ function render() {
     return;
   }
   // Pendant une recherche dans la liste, on ne met à jour que la liste pour garder la saisie.
-  const searching = current === 'inbox' && document.activeElement && document.activeElement.id === 'inbox-search';
-  if (searching) refreshInboxList();
+  const focusedId = document.activeElement && document.activeElement.id;
+  if (current === 'inbox' && focusedId === 'inbox-search') refreshInboxList();
+  else if (current === 'requests' && focusedId === 'requests-search') refreshRequestsList();
   else root.innerHTML = VIEWS[current].render();
   document.querySelectorAll('[data-nav]').forEach(b => {
     const on = b.dataset.nav === current;
@@ -56,6 +59,9 @@ function render() {
   const badge = document.getElementById('inbox-badge');
   const n = queues('all').main.length;
   if (badge) { badge.textContent = n; badge.hidden = n === 0; }
+  const reqBadge = document.getElementById('requests-badge');
+  const u = urgentRequests().length;
+  if (reqBadge) { reqBadge.textContent = u; reqBadge.hidden = u === 0; }
   initSortables();
 }
 
@@ -210,6 +216,38 @@ const actions = {
     if (isOpen()) closeSheet();
     toast('Remis à trier.', 'good');
   },
+  'requests-tab': el => { setRequestsTab(el.dataset.tab); render(); },
+  'requests-filter': el => { setRequestsFilter(el.dataset.filter); render(); },
+  'request-new': () => openRequestSheet({ kind: 'sponsoring' }, true),
+  'request-open': el => {
+    const r = store.getRequest(Number(el.dataset.id));
+    if (r) openRequestSheet(r);
+  },
+  // Message à trier repéré à la main comme une demande : fiche pré-remplie.
+  'request-from-inbox': el => {
+    const m = store.state.inbox.find(x => x.id === Number(el.dataset.id))
+      || (store.state.inboxHistory || []).find(x => x.id === Number(el.dataset.id));
+    if (!m) return;
+    openRequestSheet({
+      kind: 'sponsoring', source: m.source, sourceKey: m.sourceKey, inboxId: m.id, receivedOn: m.receivedOn,
+      requester: m.sender, summary: m.summary, draft: m.draft, replyBy: m.due,
+    }, true);
+  },
+  'request-task': el => {
+    const r = store.getRequest(Number(el.dataset.id));
+    if (!r) return;
+    const label = kindOf(r.kind).one;
+    store.createTask({
+      p: timing(r) === 'urgent' ? 1 : 2,
+      c: r.organization || r.requester,
+      t: `Répondre à la ${label}${r.eventName ? ` (${r.eventName})` : ''}`,
+      due: replyBy(r),
+      source: r.source === 'manuel' ? null : r.source,
+    });
+    if (r.status === 'new') store.updateRequest(r.id, { status: 'pending' });
+    closeSheet();
+    toast('Tâche créée, la demande passe « en cours ».', 'good');
+  },
   'copy-draft': el => {
     const src = document.getElementById(el.dataset.target);
     if (!src) return;
@@ -257,7 +295,17 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   if (e.target.id === 'capture-input' || e.target.id === 'capture-contact') updateCapturePreview();
   if (e.target.id === 'inbox-search') { setInboxSearch(e.target.value); refreshInboxList(); }
+  if (e.target.id === 'requests-search') { setRequestsSearch(e.target.value); refreshRequestsList(); }
 });
+
+// Fiche d'une demande ; une demande créée depuis un message garde ses champs cachés
+// (origine, brouillon) en mémoire jusqu'à l'enregistrement.
+let draftRequest = null;
+function openRequestSheet(r, isNew = false) {
+  draftRequest = isNew ? r : null;
+  const full = isNew ? { requester: '', organization: '', eventName: '', eventDate: null, replyBy: null, ask: '', summary: '', draft: '', status: 'new', promising: false, notes: '', ...r } : r;
+  openFormSheet(requestSheetHtml(full, isNew), isNew ? 'input[name="organization"]' : '[data-action="close-sheet"]');
+}
 
 document.addEventListener('submit', e => {
   const form = e.target;
@@ -287,6 +335,32 @@ document.addEventListener('submit', e => {
     store.createTask({ p, c: parsed.c, t: parsed.t, star: parsed.star, due: data.get('due') || null });
     closeSheet();
     toast(p === null ? 'Tâche ajoutée, à trier.' : 'Tâche ajoutée.', 'good');
+    return;
+  }
+
+  if (form.dataset.form === 'request') {
+    const fields = {
+      kind: String(data.get('kind') || 'sponsoring'),
+      status: String(data.get('status') || 'new'),
+      promising: data.get('promising') === 'on',
+      organization: String(data.get('organization') || '').trim(),
+      requester: String(data.get('requester') || '').trim(),
+      eventName: String(data.get('eventName') || '').trim(),
+      eventDate: data.get('eventDate') || null,
+      replyBy: data.get('replyBy') || null,
+      ask: String(data.get('ask') || '').trim(),
+      notes: String(data.get('notes') || '').trim(),
+    };
+    if (form.dataset.id === 'new') {
+      if (!fields.organization && !fields.requester) { toast('Indique au moins la structure ou le contact.'); return; }
+      store.createRequest({ ...(draftRequest || {}), ...fields });
+      toast('Demande ajoutée.', 'good');
+    } else {
+      store.updateRequest(Number(form.dataset.id), fields);
+      toast('Demande enregistrée.', 'good');
+    }
+    draftRequest = null;
+    closeSheet();
     return;
   }
 

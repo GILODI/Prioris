@@ -1,9 +1,10 @@
-const CACHE = 'prioris-v8';
+const CACHE = 'prioris-v9';
 const ASSETS = [
   './', './index.html', './config.js', './manifest.json', './icon-192.png', './icon-512.png',
   './css/app.css', './js/app.js', './js/store.js', './js/parse.js', './js/dictation.js',
   './js/dates.js', './js/ui.js', './js/sheets.js',
   './js/views/home.js', './js/views/inbox.js', './js/views/tasks.js', './js/views/ideas.js', './js/views/login.js',
+  './js/views/requests.js',
 ];
 
 self.addEventListener('install', e => {

@@ -7,6 +7,7 @@ import { state, sortForZone } from '../store.js';
 import { shortDateTime, addDays, today, dueLabel, agoLabel, daysUntil } from '../dates.js';
 import { esc, ZONES, zoneOf, dueChip, waitingChip } from '../ui.js';
 import { normWord } from '../parse.js';
+import { requestForInbox, kindOf } from './requests.js';
 
 const skipped = [];   // éléments passés pendant cette session : ils reviennent en fin de file
 let tab = 'main';
@@ -236,12 +237,20 @@ function messageCard(m, position, inSheet = false) {
 
     <div class="triage-extra">
       <button class="btn" data-action="inbox-wait" data-id="${m.id}" data-p="${m.p ?? 3}">J'attends une réponse</button>
+      ${requestLink(m)}
     </div>
     <div class="triage-foot">
       <button class="btn ghost" data-action="inbox-ignore" data-id="${m.id}">${m.needsAction ? 'Pas de tâche' : 'Archiver'}</button>
       ${inSheet ? '' : `<span class="spacer"></span><button class="btn" data-action="triage-skip" data-key="m${m.id}">Passer</button>`}
     </div>
   </section>`;
+}
+
+// Lien vers l'espace Demandes : la demande déjà repérée, ou de quoi en créer une.
+function requestLink(m) {
+  const r = requestForInbox(m.id);
+  if (r) return `<button class="btn request-link" data-action="request-open" data-id="${r.id}">${esc(kindOf(r.kind).label)} · voir la demande</button>`;
+  return `<button class="btn ghost" data-action="request-from-inbox" data-id="${m.id}">C'est une demande (sponsoring, lots, visuel)</button>`;
 }
 
 function historyCard(m) {
@@ -255,6 +264,7 @@ function historyCard(m) {
     ${messageBody(m)}
     ${m.action ? `<p><b>Action proposée :</b> ${esc(m.action)}</p>` : ''}
     ${draftHtml(m)}
+    <div class="triage-extra">${requestLink(m)}</div>
     <div class="triage-foot">
       <span class="spacer"></span>
       <button class="btn" data-action="inbox-restore" data-id="${m.id}">Remettre à trier</button>

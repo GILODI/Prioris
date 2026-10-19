@@ -33,6 +33,9 @@ export function openHtmlSheet(innerHtml, label) {
   </div>`, '[data-action="close-sheet"]');
 }
 
+// Fenêtre dont le contenu est déjà un formulaire complet (ex. fiche d'une demande).
+export function openFormSheet(html, focusSelector) { open(html, focusSelector); }
+
 // --- Ajout rapide : tâche ou idée ---
 
 export function openCapture(mode = 'task') {

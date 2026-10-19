@@ -10,6 +10,8 @@ export const state = {
   inbox: [],              // messages (mails, WhatsApp) importés, pas encore traités
   inboxAvailable: true,   // false tant que la table "inbox_items" n'existe pas
   inboxHistory: null,     // messages déjà traités, chargés seulement à l'ouverture de l'historique
+  requests: [],           // demandes de sponsoring, de lots et de visuels (toutes, y compris closes)
+  requestsAvailable: true, // false tant que la table "requests" n'existe pas
   ready: false,
   online: false,
   needsLogin: false,
@@ -60,8 +62,31 @@ function inboxFromRow(r) {
     subject: r.subject || '', summary: r.summary || '', action: r.proposed_action || '',
     p: r.proposed_priority ?? null, due: r.proposed_due || null, draft: r.draft_reply || '',
     urgent: !!r.urgent, urgencyReason: r.urgency_reason || '', needsAction: r.needs_action !== false,
-    status: r.status, createdAt: r.created_at || null,
+    status: r.status, createdAt: r.created_at || null, sourceKey: r.source_key || null,
   };
+}
+
+const REQUEST_MAP = {
+  kind: 'kind', source: 'source', sourceKey: 'source_key', inboxId: 'inbox_id', receivedOn: 'received_on',
+  requester: 'requester', organization: 'organization', eventName: 'event_name', eventDate: 'event_date',
+  replyBy: 'reply_by', ask: 'ask', summary: 'summary', draft: 'draft_reply', status: 'status',
+  promising: 'promising', notes: 'notes',
+};
+
+function requestFromRow(r) {
+  return {
+    id: r.id, kind: r.kind, source: r.source || 'manuel', sourceKey: r.source_key || null,
+    inboxId: r.inbox_id || null, receivedOn: r.received_on || null, requester: r.requester || '',
+    organization: r.organization || '', eventName: r.event_name || '', eventDate: r.event_date || null,
+    replyBy: r.reply_by || null, ask: r.ask || '', summary: r.summary || '', draft: r.draft_reply || '',
+    status: r.status || 'new', promising: !!r.promising, notes: r.notes || '', createdAt: r.created_at || null,
+  };
+}
+
+function requestToRow(fields) {
+  const row = {};
+  for (const k in fields) if (REQUEST_MAP[k]) row[REQUEST_MAP[k]] = fields[k] === '' && /Date|replyBy|receivedOn/.test(k) ? null : fields[k];
+  return row;
 }
 
 function toRow(fields) {
@@ -111,6 +136,7 @@ function showLogin() {
   state.ideas = [];
   state.inbox = [];
   state.inboxHistory = null;
+  state.requests = [];
   state.ready = true;
   try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
   listeners.forEach(fn => fn());
@@ -137,13 +163,16 @@ export async function signOut() {
 
 async function loadRemote() {
   try {
-    const [tasksRes, ideasRes, inboxRes] = await Promise.all([
+    const [tasksRes, ideasRes, inboxRes, requestsRes] = await Promise.all([
       sb.from('tasks').select('*').order('id', { ascending: true }),
       sb.from('ideas').select('*').order('created_at', { ascending: false }),
       sb.from('inbox_items').select('*').eq('status', 'new').order('received_on', { ascending: false }),
+      sb.from('requests').select('*').order('received_on', { ascending: false }).limit(3000),
     ]);
     if (inboxRes.error) { state.inboxAvailable = false; state.inbox = []; }
     else { state.inboxAvailable = true; state.inbox = inboxRes.data.map(inboxFromRow); }
+    if (requestsRes.error) { state.requestsAvailable = false; state.requests = []; }
+    else { state.requestsAvailable = true; state.requests = requestsRes.data.map(requestFromRow); }
     if (tasksRes.error) throw tasksRes.error;
     state.tasks = tasksRes.data.map(taskFromRow);
     state.schemaV2 = tasksRes.data.length === 0 || 'focus_date' in tasksRes.data[0];
@@ -188,6 +217,16 @@ function listenRealtime() {
       if (state.inboxHistory) state.inboxHistory = state.inboxHistory.filter(x => x.id !== id);
       if (row && row.status === 'new') state.inbox.push(inboxFromRow(row));
       else if (row && state.inboxHistory) state.inboxHistory.unshift(inboxFromRow(row));
+      emit();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, payload => {
+      if (payload.eventType === 'DELETE') {
+        state.requests = state.requests.filter(x => x.id !== payload.old.id);
+      } else {
+        const r = requestFromRow(payload.new);
+        const i = state.requests.findIndex(x => x.id === r.id);
+        if (i >= 0) state.requests[i] = r; else state.requests.unshift(r);
+      }
       emit();
     })
     .subscribe();
@@ -267,6 +306,48 @@ export function restoreInbox(id) {
   if (!sb) return;
   sb.from('inbox_items').update({ status: 'new' }).eq('id', id)
     .then(({ error }) => { if (error) report(error, 'Le message n\'a pas pu être remis à trier.'); });
+}
+
+// --- Demandes (sponsoring, lots, visuels) ---
+// Jamais supprimées : une demande close garde son issue, pour l'historique.
+
+export function getRequest(id) { return state.requests.find(x => x.id === id); }
+
+export async function createRequest(fields) {
+  const local = {
+    id: tmpId--, kind: 'sponsoring', source: 'manuel', sourceKey: null, inboxId: null, receivedOn: today(),
+    requester: '', organization: '', eventName: '', eventDate: null, replyBy: null, ask: '', summary: '',
+    draft: '', status: 'new', promising: false, notes: '', createdAt: new Date().toISOString(), ...fields,
+  };
+  state.requests.unshift(local);
+  emit();
+  if (!sb) return local;
+  if (!state.requestsAvailable) {
+    report(null, 'Demande gardée sur cet appareil : l\'espace Demandes demande la mise à jour de la base (script sql/2026-10-demandes.sql).');
+    return local;
+  }
+  const { id, createdAt, ...rest } = local;
+  const { data, error } = await sb.from('requests').insert([requestToRow(rest)]).select().single();
+  if (error) {
+    report(error, /duplicate|unique/i.test(error.message || '') ? 'Ce message est déjà enregistré comme demande.' : 'La demande est enregistrée sur cet appareil mais pas synchronisée.');
+    return local;
+  }
+  const created = requestFromRow(data);
+  const i = state.requests.indexOf(local);
+  if (state.requests.some(x => x.id === data.id)) { if (i >= 0) state.requests.splice(i, 1); }
+  else if (i >= 0) state.requests[i] = created;
+  emit();
+  return created;
+}
+
+export function updateRequest(id, fields) {
+  const r = getRequest(id);
+  if (!r) return;
+  Object.assign(r, fields);
+  emit();
+  if (!sb || id < 0) return;
+  sb.from('requests').update({ ...requestToRow(fields), updated_at: new Date().toISOString() }).eq('id', id)
+    .then(({ error }) => { if (error) report(error, 'La demande n\'a pas été mise à jour dans la base.'); });
 }
 
 export function updateTask(id, fields) {

@@ -50,7 +50,7 @@ code { font-size: 0.85em; background: var(--grey-soft); padding: 1px 5px; border
 .view { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: calc(16px + env(safe-area-inset-top, 0px)) calc(var(--nav-h) + 96px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 16px; align-content: start; }
 .view:focus { outline: none; }
 
-.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
 .brand { display: none; }
 .nav-item { display: grid; justify-items: center; gap: 2px; padding: 8px 4px 9px; background: none; border: 0; color: var(--muted); font-size: 11.5px; font-weight: 600; }
 .nav-item .ico { position: relative; width: 24px; height: 24px; }
@@ -221,6 +221,21 @@ h2 { font-size: 16.5px; margin: 0; }
 .counts div { display: grid; }
 .counts b { font-size: 22px; font-variant-numeric: tabular-nums; }
 .counts span { font-size: 12px; color: var(--muted); }
+
+/* --- Demandes --- */
+.card.has-urgent { border-color: var(--red); }
+.head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.head-row > div { display: grid; gap: 2px; min-width: 0; }
+.warn-red { color: var(--red); }
+.segmented .n-red { color: var(--red); opacity: 1; font-weight: 700; }
+.chip.violet { background: var(--violet-soft); color: var(--violet); }
+.history-block { display: grid; gap: 4px; background: var(--surface-2); border-radius: 10px; padding: 8px 12px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.small-text { font-size: 15px; font-weight: 500; }
+.request-link { border-color: var(--violet); color: var(--violet); background: var(--violet-soft); }
+.link-row .chip { flex: none; }
+.mini-list { grid-template-columns: minmax(0, 1fr); }
+.head-row .btn { white-space: nowrap; flex: none; }
 
 /* --- Idées --- */
 .idea-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }

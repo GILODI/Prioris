@@ -4,8 +4,10 @@
 #   -Action check   : vérifie la connexion et le jeton
 #   -Action keys    : écrit la liste des messages déjà importés (source_key) dans -Out
 #   -Action insert  : envoie les messages de -File (tableau JSON) dans « À trier »
+#   -Action request-keys    : écrit la liste des demandes déjà importées dans -Out
+#   -Action insert-requests : envoie les demandes de -File (tableau JSON) dans « Demandes »
 param(
-  [ValidateSet('check', 'keys', 'insert')][string]$Action = 'check',
+  [ValidateSet('check', 'keys', 'insert', 'request-keys', 'insert-requests')][string]$Action = 'check',
   [string]$File,
   [string]$Out = (Join-Path $PSScriptRoot 'out\existing-keys.json')
 )
@@ -83,5 +85,34 @@ switch ($Action) {
       $added += [int](Call-Rpc 'prioris_import' @{ p_token = $token; p_items = $batch })
     }
     Write-Output ("{0} messages envoyés, {1} nouveaux ajoutés à Prioris (les autres y étaient déjà)." -f $rows.Count, $added)
+  }
+  'request-keys' {
+    if (-not $PSBoundParameters.ContainsKey('Out')) { $Out = Join-Path $PSScriptRoot 'out\existing-request-keys.json' }
+    $keys = @(Call-Rpc 'prioris_request_keys' @{ p_token = $token } | ForEach-Object { $_ } | Where-Object { $_ })
+    Write-Utf8 $Out (ConvertTo-Json -InputObject @($keys))
+    Write-Output ("{0} demandes déjà importées -> {1}" -f $keys.Count, $Out)
+  }
+  'insert-requests' {
+    if (-not $File -or -not (Test-Path $File)) { throw "Fichier à envoyer introuvable : $File" }
+    $allowed = 'kind', 'source', 'source_key', 'received_on', 'requester', 'organization', 'event_name',
+               'event_date', 'reply_by', 'ask', 'summary', 'draft_reply', 'status'
+    $parsed = ConvertFrom-Json -InputObject (Get-Content -Raw -Encoding UTF8 $File)
+    $items = @($parsed | ForEach-Object { $_ })
+    $rows = @(foreach ($it in $items) {
+      if ($it.kind -notin 'sponsoring', 'lots', 'visuel') { throw "Type de demande inconnu pour $($it.source_key) : $($it.kind)" }
+      $row = [ordered]@{}
+      foreach ($k in $allowed) {
+        $v = $it.$k
+        if ($k -in 'received_on', 'event_date', 'reply_by' -and -not ($v -match '^\d{4}-\d{2}-\d{2}$')) { $v = $null }
+        $row[$k] = $v
+      }
+      [pscustomobject]$row
+    })
+    $added = 0
+    for ($i = 0; $i -lt $rows.Count; $i += 50) {
+      $batch = @($rows[$i..([Math]::Min($i + 49, $rows.Count - 1))])
+      $added += [int](Call-Rpc 'prioris_import_requests' @{ p_token = $token; p_items = $batch })
+    }
+    Write-Output ("{0} demandes envoyées, {1} nouvelles ajoutées à Prioris (les autres y étaient déjà)." -f $rows.Count, $added)
   }
 }
