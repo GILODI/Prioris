@@ -285,6 +285,33 @@ export async function inboxToTask(id, { p, waiting = false }) {
 
 export function ignoreInbox(id) { setInboxStatus(id, { status: 'ignored' }); }
 
+// Archive plusieurs messages d'un coup (une seule requête). Renvoie les messages archivés,
+// pour pouvoir annuler.
+export function ignoreInboxMany(ids) {
+  const items = state.inbox.filter(x => ids.includes(x.id));
+  if (!items.length) return [];
+  state.inbox = state.inbox.filter(x => !ids.includes(x.id));
+  if (state.inboxHistory) state.inboxHistory.unshift(...items.map(i => ({ ...i, status: 'ignored' })));
+  emit();
+  if (sb) {
+    sb.from('inbox_items').update({ status: 'ignored' }).in('id', items.map(i => i.id))
+      .then(({ error }) => { if (error) report(error, 'Les messages n\'ont pas été archivés dans la base.'); });
+  }
+  return items;
+}
+
+// Annule un archivage : les messages reviennent à trier, tels qu'ils étaient.
+export function undoIgnoreInbox(items) {
+  if (!items.length) return;
+  const ids = items.map(i => i.id);
+  if (state.inboxHistory) state.inboxHistory = state.inboxHistory.filter(x => !ids.includes(x.id));
+  state.inbox = [...state.inbox.filter(x => !ids.includes(x.id)), ...items.map(i => ({ ...i, status: 'new' }))];
+  emit();
+  if (!sb) return;
+  sb.from('inbox_items').update({ status: 'new' }).in('id', ids)
+    .then(({ error }) => { if (error) report(error, 'L\'archivage n\'a pas pu être annulé dans la base.'); });
+}
+
 // --- Historique : messages déjà traités (chargés à la demande) ---
 
 export async function loadInboxHistory() {
@@ -306,6 +333,20 @@ export function restoreInbox(id) {
   if (!sb) return;
   sb.from('inbox_items').update({ status: 'new' }).eq('id', id)
     .then(({ error }) => { if (error) report(error, 'Le message n\'a pas pu être remis à trier.'); });
+}
+
+// Remet plusieurs messages de l'historique à trier (une seule requête).
+export function restoreInboxMany(ids) {
+  const items = (state.inboxHistory || []).filter(x => ids.includes(x.id));
+  if (!items.length) return 0;
+  state.inboxHistory = state.inboxHistory.filter(x => !ids.includes(x.id));
+  state.inbox.push(...items.map(i => ({ ...i, status: 'new' })));
+  emit();
+  if (sb) {
+    sb.from('inbox_items').update({ status: 'new' }).in('id', items.map(i => i.id))
+      .then(({ error }) => { if (error) report(error, 'Les messages n\'ont pas pu être remis à trier.'); });
+  }
+  return items.length;
 }
 
 // --- Demandes (sponsoring, lots, visuels) ---
@@ -435,15 +476,17 @@ export function urgency(t) {
   return s;
 }
 
+// Suggestions : d'abord les échéances dépassées ou du jour, puis les premières tâches
+// de la liste, dans l'ordre de l'écran Tâches (catégorie 0 à 4, puis l'ordre choisi à la main).
+// Les tâches en attente d'une réponse et celles à classer ne sont pas proposées.
 export function focusSuggestions(limit) {
   const d = today();
-  return state.tasks
-    .filter(t => !t.done && t.focus !== d)
-    .map(t => ({ t, s: urgency(t) }))
-    .filter(x => x.s > 0)
-    .sort((a, b) => b.s - a.s || (a.t.sort ?? a.t.id) - (b.t.sort ?? b.t.id))
-    .slice(0, limit)
-    .map(x => x.t);
+  const candidates = state.tasks.filter(t => !t.done && !t.waiting && t.focus !== d && t.p !== null && t.p !== undefined);
+  const late = candidates.filter(t => t.due && daysUntil(t.due) <= 0)
+    .sort((a, b) => a.due.localeCompare(b.due) || a.p - b.p || (a.sort ?? a.id) - (b.sort ?? b.id));
+  const rest = candidates.filter(t => !late.includes(t))
+    .sort((a, b) => a.p - b.p || (a.sort ?? a.id) - (b.sort ?? b.id));
+  return [...late, ...rest].slice(0, limit);
 }
 
 // --- Idées ---

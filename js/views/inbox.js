@@ -20,10 +20,42 @@ function loadPrefs() {
 }
 function savePrefs() { try { localStorage.setItem('prioris_v2_inbox', JSON.stringify(prefs)); } catch (e) {} }
 
+// Mode sélection (liste) : cocher plusieurs messages pour les archiver ou les remettre à trier d'un coup.
+let selecting = false;
+const selected = new Set();
+
 export function getInboxTab() { return tab; }
-export function setInboxTab(t) { tab = t; }
-export function setInboxMode(m) { prefs.mode = m; savePrefs(); }
-export function setInboxSource(s) { prefs.source = s; savePrefs(); }
+export function setInboxTab(t) { tab = t; clearSelection(); }
+export function setInboxMode(m) { prefs.mode = m; savePrefs(); clearSelection(); }
+export function setInboxSource(s) { prefs.source = s; savePrefs(); clearSelection(); }
+export function isSelecting() { return selecting; }
+export function startSelecting() { selecting = true; selected.clear(); }
+export function clearSelection() { selecting = false; selected.clear(); }
+export function toggleSelected(id) { if (selected.has(id)) selected.delete(id); else selected.add(id); }
+export function selectedIds() { return [...selected]; }
+// Tout sélectionner / tout désélectionner, parmi les messages affichés (filtre et recherche compris).
+export function toggleSelectAll() {
+  const ids = visibleEntries().filter(e => e.kind !== 'task').map(e => e.item.id);
+  const all = ids.length && ids.every(id => selected.has(id));
+  selected.clear();
+  if (!all) ids.forEach(id => selected.add(id));
+}
+
+function visibleEntries() { return queues(prefs.source)[tab].filter(e => matches(e, search)); }
+
+// Message à ouvrir après une action faite depuis la liste : le suivant dans la file affichée
+// (même onglet, même filtre, même recherche), ou le précédent si c'était le dernier.
+// À appeler avant l'action, tant que le message est encore dans la file.
+export function nextEntryKey(key) {
+  const list = visibleEntries().filter(e => e.kind !== 'task');
+  const i = list.findIndex(e => e.key === key);
+  if (i < 0) return null;
+  const next = list[i + 1] || list[i - 1];
+  return next ? next.key : null;
+}
+export function inboxTabLabel() {
+  return { main: 'À traiter', older: 'Plus anciens', info: 'Pour info', history: 'Historique' }[tab];
+}
 export function setInboxSearch(s) { search = s; }
 export function skipItem(key) { if (!skipped.includes(key)) skipped.push(key); }
 
@@ -147,11 +179,48 @@ function listHtml(entries) {
   const shown = entries.filter(e => matches(e, search));
   if (!entries.length) return emptyHtml();
   if (!shown.length) return `<p class="empty card">Aucun résultat pour « ${esc(search)} ».</p>`;
-  return `<p class="muted small">${shown.length} élément${shown.length > 1 ? 's' : ''}</p>
+  const selectable = shown.filter(e => e.kind !== 'task');
+  // Les ids sélectionnés qui ne sont plus affichés (filtre, recherche, déjà traités) ne comptent pas.
+  for (const id of [...selected]) if (!selectable.some(e => e.item.id === id)) selected.delete(id);
+  const n = selected.size;
+  const allOn = selectable.length && selectable.every(e => selected.has(e.item.id));
+  const head = !selectable.length ? `<p class="muted small">${shown.length} élément${shown.length > 1 ? 's' : ''}</p>`
+    : selecting ? `
+    <div class="select-bar" role="group" aria-label="Sélection">
+      <span class="select-count">${n ? `${n} sélectionné${n > 1 ? 's' : ''}` : 'Touche les messages à sélectionner'}</span>
+      <button class="btn small-btn" data-action="inbox-select-all">${allOn ? 'Tout désélectionner' : `Tout sélectionner (${selectable.length})`}</button>
+      ${tab === 'history'
+        ? `<button class="btn small-btn primary" data-action="inbox-bulk-restore"${n ? '' : ' disabled'}>Remettre à trier${n ? ` (${n})` : ''}</button>`
+        : `<button class="btn small-btn primary" data-action="inbox-bulk-archive"${n ? '' : ' disabled'}>Archiver${n ? ` (${n})` : ''}</button>`}
+      <button class="btn small-btn ghost" data-action="inbox-select-stop">Terminer</button>
+    </div>`
+    : `<div class="list-head"><p class="muted small">${shown.length} élément${shown.length > 1 ? 's' : ''}</p>
+      <button class="pill" data-action="inbox-select-start">Sélectionner</button></div>`;
+  return `${head}
   <ul class="msg-list">${shown.map(rowHtml).join('')}</ul>`;
 }
 
 function rowHtml(e) {
+  if (selecting && e.kind !== 'task') return selectRowHtml(e);
+  return plainRowHtml(e);
+}
+
+// Ligne en mode sélection : un appui coche ou décoche, sans ouvrir le message.
+function selectRowHtml(e) {
+  const it = e.item;
+  const on = selected.has(it.id);
+  return `<li><button class="msg-row selectable${on ? ' is-selected' : ''}" role="checkbox" aria-checked="${on}" data-action="inbox-select" data-id="${it.id}">
+    <span class="row-top">
+      <span class="check" aria-hidden="true">${on ? '✓' : ''}</span>
+      <span class="chip src-${it.source}">${it.source === 'whatsapp' ? 'WhatsApp' : 'Mail'}</span>
+      <b>${esc(it.sender || 'Expéditeur inconnu')}</b>
+      <span class="muted small row-date">${it.receivedOn ? esc(agoLabel(it.receivedOn)) : ''}</span>
+    </span>
+    <span class="row-sum">${esc(it.summary || it.subject || '—')}</span>
+  </button></li>`;
+}
+
+function plainRowHtml(e) {
   const it = e.item;
   if (e.kind === 'task') {
     return `<li><button class="msg-row" data-action="edit" data-id="${it.id}">
@@ -174,11 +243,20 @@ function rowHtml(e) {
 }
 
 // Carte d'un élément ouvert depuis la liste (affichée dans une fenêtre).
+// Indique sa place dans la file affichée et propose « Suivant » pour avancer sans rien faire.
 export function entrySheetHtml(key) {
   const e = findEntry(key);
   if (!e) return null;
-  if (e.kind === 'done') return historyCard(e.item);
-  return messageCard(e.item, '', true);
+  const list = visibleEntries().filter(x => x.kind !== 'task');
+  const i = list.findIndex(x => x.key === key);
+  const position = i >= 0 ? `${i + 1} sur ${list.length} · ${inboxTabLabel()}` : '';
+  const next = i >= 0 && list[i + 1] ? list[i + 1].key : null;
+  if (e.kind === 'done') return historyCard(e.item, position, next);
+  return messageCard(e.item, position, true, next);
+}
+
+function nextButton(next) {
+  return next ? `<button class="btn" data-action="open-entry" data-key="${next}">Suivant</button>` : '';
 }
 
 function lastSync() {
@@ -213,7 +291,7 @@ function draftHtml(m) {
     </div>`;
 }
 
-function messageCard(m, position, inSheet = false) {
+function messageCard(m, position, inSheet = false, next = null) {
   const sourceLabel = m.source === 'whatsapp' ? 'WhatsApp' : 'Mail';
   return `
   <section class="${inSheet ? '' : 'card '}triage${m.urgent ? ' is-urgent' : ''}" aria-label="Message à trier">
@@ -241,7 +319,8 @@ function messageCard(m, position, inSheet = false) {
     </div>
     <div class="triage-foot">
       <button class="btn ghost" data-action="inbox-ignore" data-id="${m.id}">${m.needsAction ? 'Pas de tâche' : 'Archiver'}</button>
-      ${inSheet ? '' : `<span class="spacer"></span><button class="btn" data-action="triage-skip" data-key="m${m.id}">Passer</button>`}
+      <span class="spacer"></span>
+      ${inSheet ? nextButton(next) : `<button class="btn" data-action="triage-skip" data-key="m${m.id}">Passer</button>`}
     </div>
   </section>`;
 }
@@ -253,21 +332,22 @@ function requestLink(m) {
   return `<button class="btn ghost" data-action="request-from-inbox" data-id="${m.id}">C'est une demande (sponsoring, lots, visuel)</button>`;
 }
 
-function historyCard(m) {
+function historyCard(m, position = '', next = null) {
   return `
   <section class="triage" aria-label="Message déjà traité">
     <div class="triage-meta">
       <span class="chip src-${m.source}">${m.source === 'whatsapp' ? 'WhatsApp' : 'Mail'}</span>
       <span class="chip">${m.status === 'task' ? 'tâche créée' : 'classé sans tâche'}</span>
-      <span class="muted small">${m.receivedOn ? `reçu ${esc(agoLabel(m.receivedOn))}` : ''}</span>
+      <span class="muted small">${m.receivedOn ? `reçu ${esc(agoLabel(m.receivedOn))}` : ''}${position ? ` · ${position}` : ''}</span>
     </div>
     ${messageBody(m)}
     ${m.action ? `<p><b>Action proposée :</b> ${esc(m.action)}</p>` : ''}
     ${draftHtml(m)}
     <div class="triage-extra">${requestLink(m)}</div>
     <div class="triage-foot">
-      <span class="spacer"></span>
       <button class="btn" data-action="inbox-restore" data-id="${m.id}">Remettre à trier</button>
+      <span class="spacer"></span>
+      ${nextButton(next)}
     </div>
   </section>`;
 }

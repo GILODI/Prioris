@@ -1,7 +1,7 @@
 // Point d'entrée : navigation entre les écrans, actions, ajout rapide, messages.
 import * as store from './store.js';
 import { renderHome } from './views/home.js';
-import { renderInbox, skipItem, setInboxTab, setInboxMode, setInboxSource, setInboxSearch, refreshInboxList, entrySheetHtml, queues } from './views/inbox.js';
+import { renderInbox, skipItem, setInboxTab, setInboxMode, setInboxSource, setInboxSearch, refreshInboxList, entrySheetHtml, queues, nextEntryKey, inboxTabLabel, startSelecting, clearSelection, toggleSelected, toggleSelectAll, selectedIds } from './views/inbox.js';
 import { renderTasks, setFilter, toggleCollapse, toggleDoneList } from './views/tasks.js';
 import { renderIdeas } from './views/ideas.js';
 import { renderLogin, login, rememberEmail } from './views/login.js';
@@ -87,13 +87,42 @@ function initSortables() {
 // --- Messages ---
 
 let toastTimer = null;
-function toast(msg, tone = '') {
+let toastUndo = null;
+// Avec `undo`, la notification propose « Annuler » et reste un peu plus longtemps.
+function toast(msg, tone = '', undo = null) {
   const el = document.getElementById('toast');
   el.textContent = msg;
+  toastUndo = undo;
+  if (undo) {
+    const b = document.createElement('button');
+    b.className = 'toast-undo';
+    b.dataset.action = 'toast-undo';
+    b.textContent = 'Annuler';
+    el.append(' ', b);
+  }
   el.className = 'toast ' + tone;
   el.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, 3500);
+  toastTimer = setTimeout(() => { el.hidden = true; toastUndo = null; }, undo ? 6000 : 3500);
+}
+
+// Après une action sur un message ouvert depuis la liste : ouvre directement le suivant
+// de la même file, ou ferme la fenêtre s'il n'y en a plus. `next` est calculé avant l'action.
+function openNextEntry(next) {
+  const html = next && entrySheetHtml(next);
+  if (html) { openHtmlSheet(html, 'Message'); return true; }
+  closeSheet();
+  return false;
+}
+
+// Applique une action de tri à un message, puis enchaîne si la fenêtre était ouverte.
+function triageMessage(id, run, msg, tone = '', undo = null) {
+  const inSheet = isOpen();
+  const next = inSheet ? nextEntryKey('m' + id) : null;
+  const result = run();
+  let text = msg;
+  if (inSheet && !openNextEntry(next)) text += ` Plus rien dans « ${inboxTabLabel()} ».`;
+  toast(text, tone, undo ? () => undo(result) : null);
 }
 
 function selectText(el) {
@@ -197,24 +226,45 @@ const actions = {
     if (html) openHtmlSheet(html, 'Message');
   },
   'inbox-task': el => {
-    store.inboxToTask(Number(el.dataset.id), { p: Number(el.dataset.p) });
-    if (isOpen()) closeSheet();
-    toast('Tâche créée.', 'good');
+    const id = Number(el.dataset.id);
+    triageMessage(id, () => store.inboxToTask(id, { p: Number(el.dataset.p) }), 'Tâche créée.', 'good');
   },
   'inbox-wait': el => {
-    store.inboxToTask(Number(el.dataset.id), { p: Number(el.dataset.p), waiting: true });
-    if (isOpen()) closeSheet();
-    toast('Tâche créée, en attente de réponse.', 'good');
+    const id = Number(el.dataset.id);
+    triageMessage(id, () => store.inboxToTask(id, { p: Number(el.dataset.p), waiting: true }), 'Tâche créée, en attente de réponse.', 'good');
   },
   'inbox-ignore': el => {
-    store.ignoreInbox(Number(el.dataset.id));
-    if (isOpen()) closeSheet();
-    toast('Classé sans tâche.');
+    const id = Number(el.dataset.id);
+    triageMessage(id, () => store.ignoreInboxMany([id]), 'Classé sans tâche.', '', items => store.undoIgnoreInbox(items));
   },
   'inbox-restore': el => {
-    store.restoreInbox(Number(el.dataset.id));
-    if (isOpen()) closeSheet();
-    toast('Remis à trier.', 'good');
+    const id = Number(el.dataset.id);
+    triageMessage(id, () => store.restoreInbox(id), 'Remis à trier.', 'good');
+  },
+  'toast-undo': () => {
+    const fn = toastUndo;
+    toastUndo = null;
+    document.getElementById('toast').hidden = true;
+    if (fn) { fn(); toast('Annulé.'); }
+  },
+  'inbox-select-start': () => { startSelecting(); refreshInboxList(); },
+  'inbox-select-stop': () => { clearSelection(); refreshInboxList(); },
+  'inbox-select': el => { toggleSelected(Number(el.dataset.id)); refreshInboxList(); },
+  'inbox-select-all': () => { toggleSelectAll(); refreshInboxList(); },
+  'inbox-bulk-archive': () => {
+    const items = store.ignoreInboxMany(selectedIds());
+    if (!items.length) return;
+    clearSelection();
+    render();
+    const n = items.length;
+    toast(`${n} message${n > 1 ? 's' : ''} archivé${n > 1 ? 's' : ''}.`, '', () => store.undoIgnoreInbox(items));
+  },
+  'inbox-bulk-restore': () => {
+    const n = store.restoreInboxMany(selectedIds());
+    if (!n) return;
+    clearSelection();
+    render();
+    toast(`${n} message${n > 1 ? 's' : ''} remis à trier.`, 'good');
   },
   'requests-tab': el => { setRequestsTab(el.dataset.tab); render(); },
   'requests-filter': el => { setRequestsFilter(el.dataset.filter); render(); },

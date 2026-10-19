@@ -211,6 +211,17 @@ h2 { font-size: 16.5px; margin: 0; }
 .msg-row { width: 100%; display: grid; gap: 4px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .msg-row.is-urgent { border-left: 4px solid var(--red); }
 .msg-row:hover { border-color: var(--navy); }
+/* Mode sélection (archiver plusieurs messages d'un coup) */
+.list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.list-head p { margin: 0; }
+.select-bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; box-shadow: var(--shadow); }
+.select-count { flex: 1 1 100%; font-size: 13px; font-weight: 600; }
+@media (min-width: 640px) { .select-count { flex: 1 1 auto; } }
+.select-bar .btn[disabled] { opacity: 0.45; cursor: default; }
+.msg-row .check { width: 20px; height: 20px; flex: none; border: 2px solid var(--line); border-radius: 6px; display: inline-grid; place-items: center; font-size: 13px; font-weight: 700; line-height: 1; }
+.msg-row.is-selected { border-color: var(--navy); background: color-mix(in srgb, var(--navy) 8%, var(--surface)); }
+.msg-row.is-selected .check { background: var(--navy); border-color: var(--navy); color: var(--on-navy); }
+.toast-undo { margin-left: 10px; background: none; border: 0; padding: 0 2px; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 .row-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .row-top b { font-size: 14px; color: var(--navy); }
 .row-date { margin-left: auto; }

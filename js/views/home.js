@@ -82,7 +82,7 @@ export function renderHome() {
           ${suggestions.map(t => taskRow(t, { focusButton: 'add', showZone: true })).join('')}
         </div>
       </div>` : ''}
-    ${!focus.length && !suggestions.length ? `<p class="empty">Rien d'urgent repéré. Ouvre tes tâches et ajoute ce que tu veux avancer aujourd'hui depuis le menu d'une tâche.</p>` : ''}
+    ${!focus.length && !suggestions.length ? `<p class="empty">Aucune tâche classée à proposer. Ouvre tes tâches et ajoute ce que tu veux avancer aujourd'hui depuis le menu d'une tâche.</p>` : ''}
   </section>
 
   <div class="grid2">
