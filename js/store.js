@@ -12,6 +12,7 @@ export const state = {
   inboxHistory: null,     // messages déjà traités, chargés seulement à l'ouverture de l'historique
   requests: [],           // demandes de sponsoring, de lots et de visuels (toutes, y compris closes)
   requestsAvailable: true, // false tant que la table "requests" n'existe pas
+  senderRules: {},        // choix par expéditeur : { 'nom en minuscules': 'info' | 'action' | 'none' }
   ready: false,
   online: false,
   needsLogin: false,
@@ -168,12 +169,16 @@ export async function signOut() {
 
 async function loadRemote() {
   try {
-    const [tasksRes, ideasRes, inboxRes, requestsRes] = await Promise.all([
+    const [tasksRes, ideasRes, inboxRes, requestsRes, rulesRes] = await Promise.all([
       sb.from('tasks').select('*').order('id', { ascending: true }),
       sb.from('ideas').select('*').order('created_at', { ascending: false }),
       sb.from('inbox_items').select('*').eq('status', 'new').order('received_on', { ascending: false }),
       sb.from('requests').select('*').order('received_on', { ascending: false }).limit(3000),
+      sb.from('sender_rules').select('sender, rule'),
     ]);
+    state.senderRulesAvailable = !rulesRes.error;
+    state.senderRules = {};
+    if (!rulesRes.error) rulesRes.data.forEach(r => { state.senderRules[r.sender] = r.rule; });
     if (inboxRes.error) { state.inboxAvailable = false; state.inbox = []; }
     else { state.inboxAvailable = true; state.inbox = inboxRes.data.map(inboxFromRow); }
     if (requestsRes.error) { state.requestsAvailable = false; state.requests = []; }
@@ -357,6 +362,26 @@ export function restoreInboxMany(ids) {
 
 // --- Demandes (sponsoring, lots, visuels) ---
 // Jamais supprimées : une demande close garde son issue, pour l'historique.
+
+// --- Choix par expéditeur : « toujours pour info » / « toujours à traiter » ---
+// Pris en compte à la prochaine synchronisation (sql/2026-10-regles-expediteurs.sql).
+
+export const senderKey = s => String(s || '').trim().toLowerCase();
+export function senderRule(sender) { return state.senderRules[senderKey(sender)] || 'none'; }
+
+export function setSenderRule(sender, rule) {
+  const key = senderKey(sender);
+  if (!key) return;
+  state.senderRules[key] = rule;
+  emit();
+  if (!sb) return;
+  if (state.senderRulesAvailable === false) {
+    report(null, 'Ce choix demande la mise à jour de la base (script sql/2026-10-regles-expediteurs.sql).');
+    return;
+  }
+  sb.from('sender_rules').upsert({ sender: key, rule, updated_at: new Date().toISOString() })
+    .then(({ error }) => { if (error) report(error, 'Le choix pour cet expéditeur n\'a pas été enregistré.'); });
+}
 
 export function getRequest(id) { return state.requests.find(x => x.id === id); }
 

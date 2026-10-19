@@ -1,7 +1,7 @@
 // Point d'entrée : navigation entre les écrans, actions, ajout rapide, messages.
 import * as store from './store.js';
 import { renderHome } from './views/home.js';
-import { renderInbox, skipItem, setInboxTab, setInboxMode, setInboxSource, setInboxSearch, refreshInboxList, entrySheetHtml, queues, nextEntryKey, inboxTabLabel, startSelecting, clearSelection, toggleSelected, toggleSelectAll, selectedIds } from './views/inbox.js';
+import { renderInbox, skipItem, setInboxTab, setInboxMode, setInboxSource, setInboxSearch, refreshInboxList, entrySheetHtml, queues, nextEntryKey, inboxTabLabel, startSelecting, clearSelection, toggleSelected, toggleSelectAll, selectedIds, senderRuleHtml } from './views/inbox.js';
 import { renderTasks, setFilter, toggleCollapse, toggleDoneList } from './views/tasks.js';
 import { renderIdeas } from './views/ideas.js';
 import { renderLogin, login, rememberEmail } from './views/login.js';
@@ -317,6 +317,15 @@ const actions = {
     store.deleteIdea(Number(el.dataset.id));
   },
   // Bilan de la semaine
+  'sender-rule': el => {
+    const rule = el.dataset.rule;
+    store.setSenderRule(el.dataset.sender, rule);
+    toast(rule === 'info' ? 'Ses prochains messages arriveront en « Pour info ».'
+      : rule === 'action' ? 'Ses prochains messages resteront « À traiter ».' : 'Choix annulé.', 'good');
+    // Dans une fenêtre ouverte, mettre à jour la ligne (l'écran derrière se redessine seul).
+    const line = el.closest('.sender-rule');
+    if (line && line.isConnected) line.outerHTML = senderRuleHtml(el.dataset.sender);
+  },
   'week-show': () => { showWeek(); render(); },
   'week-hide': () => { hideWeek(); render(); toast('Bilan masqué. Il reste accessible en bas de l\'accueil.'); },
   'week-keep': el => {

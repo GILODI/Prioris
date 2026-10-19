@@ -3,7 +3,7 @@
 // (pour naviguer et chercher dans tout). Filtre Tout / Mails / WhatsApp.
 // Quatre files : À traiter (urgents + 7 derniers jours + tâches sans catégorie),
 // Plus anciens, Pour info, Historique (messages déjà traités).
-import { state, sortForZone } from '../store.js';
+import { state, sortForZone, senderRule } from '../store.js';
 import { shortDateTime, addDays, today, dueLabel, agoLabel, daysUntil } from '../dates.js';
 import { esc, ZONES, zoneOf, dueChip, waitingChip } from '../ui.js';
 import { normWord } from '../parse.js';
@@ -317,12 +317,31 @@ function messageCard(m, position, inSheet = false, next = null) {
       <button class="btn" data-action="inbox-wait" data-id="${m.id}" data-p="${m.p ?? 3}">J'attends une réponse</button>
       ${requestLink(m)}
     </div>
+    ${senderRuleHtml(m.sender)}
     <div class="triage-foot">
       <button class="btn ghost" data-action="inbox-ignore" data-id="${m.id}">${m.needsAction ? 'Pas de tâche' : 'Archiver'}</button>
       <span class="spacer"></span>
       ${inSheet ? nextButton(next) : `<button class="btn" data-action="triage-skip" data-key="m${m.id}">Passer</button>`}
     </div>
   </section>`;
+}
+
+// Choix pour les prochains messages de cet expéditeur (appliqué à la synchronisation).
+export function senderRuleHtml(sender) {
+  if (!sender) return '';
+  const rule = senderRule(sender);
+  const name = esc(sender);
+  if (rule === 'info') {
+    return `<p class="sender-rule muted small">Les prochains messages de ${name} arriveront en « Pour info ».
+      <button class="link" data-action="sender-rule" data-sender="${name}" data-rule="none">Annuler</button></p>`;
+  }
+  if (rule === 'action') {
+    return `<p class="sender-rule muted small">${name} reste toujours « À traiter », même s'il est souvent archivé.
+      <button class="link" data-action="sender-rule" data-sender="${name}" data-rule="none">Annuler</button></p>`;
+  }
+  return `<p class="sender-rule muted small">Pour les prochains messages de cet expéditeur :
+    <button class="link" data-action="sender-rule" data-sender="${name}" data-rule="info">toujours pour info</button>
+    · <button class="link" data-action="sender-rule" data-sender="${name}" data-rule="action">toujours à traiter</button></p>`;
 }
 
 // Lien vers l'espace Demandes : la demande déjà repérée, ou de quoi en créer une.
