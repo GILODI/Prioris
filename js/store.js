@@ -13,6 +13,7 @@ export const state = {
   requests: [],           // demandes de sponsoring, de lots et de visuels (toutes, y compris closes)
   requestsAvailable: true, // false tant que la table "requests" n'existe pas
   senderRules: {},        // choix par expéditeur : { 'nom en minuscules': 'info' | 'action' | 'none' }
+  senderSuggestions: [],  // expéditeurs toujours archivés, à valider par Alex : [{ sender, archived, lastReceived }]
   ready: false,
   online: false,
   needsLogin: false,
@@ -179,6 +180,7 @@ async function loadRemote() {
     state.senderRulesAvailable = !rulesRes.error;
     state.senderRules = {};
     if (!rulesRes.error) rulesRes.data.forEach(r => { state.senderRules[r.sender] = r.rule; });
+    loadSenderSuggestions();
     if (inboxRes.error) { state.inboxAvailable = false; state.inbox = []; }
     else { state.inboxAvailable = true; state.inbox = inboxRes.data.map(inboxFromRow); }
     if (requestsRes.error) { state.requestsAvailable = false; state.requests = []; }
@@ -369,10 +371,19 @@ export function restoreInboxMany(ids) {
 export const senderKey = s => String(s || '').trim().toLowerCase();
 export function senderRule(sender) { return state.senderRules[senderKey(sender)] || 'none'; }
 
+// Rien n'est classé « Pour info » sans validation : Prioris propose, Alex décide.
+async function loadSenderSuggestions() {
+  const { data, error } = await sb.rpc('prioris_sender_suggestions');
+  if (error) { state.senderSuggestions = []; return; }
+  state.senderSuggestions = data.map(r => ({ sender: r.sender, archived: Number(r.archived), lastReceived: r.last_received }));
+  emit();
+}
+
 export function setSenderRule(sender, rule) {
   const key = senderKey(sender);
   if (!key) return;
   state.senderRules[key] = rule;
+  state.senderSuggestions = state.senderSuggestions.filter(x => x.sender !== key);
   emit();
   if (!sb) return;
   if (state.senderRulesAvailable === false) {

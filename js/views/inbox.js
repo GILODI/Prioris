@@ -137,7 +137,11 @@ export function renderInbox() {
       <button class="pill${listMode ? ' on' : ''}" aria-pressed="${listMode}" data-action="inbox-mode" data-mode="list">Liste</button>
     </div>`}
   </div>
-  ${!state.inboxAvailable && state.online ? `<p class="notice">Les mails et messages WhatsApp arriveront ici après la mise à jour de la base et ta première synchronisation.</p>` : ''}`;
+  ${!state.inboxAvailable && state.online ? `<p class="notice">Les mails et messages WhatsApp arriveront ici après la mise à jour de la base et ta première synchronisation.</p>` : ''}
+  ${state.senderSuggestions.length ? `
+  <p class="notice senders-notice">${state.senderSuggestions.length} expéditeur${state.senderSuggestions.length > 1 ? 's' : ''} que tu archives toujours : les classer en « Pour info » ?
+    <button class="btn small-btn" data-action="senders-open">Vérifier</button></p>`
+    : tab === 'info' ? `<p class="muted small"><button class="link" data-action="senders-open">Expéditeurs classés « Pour info »</button></p>` : ''}`;
 
   if (tab === 'history' && state.inboxHistory === null) {
     return html + `<section class="card center"><p class="muted">Chargement de l'historique…</p></section>`;
@@ -323,6 +327,41 @@ function messageCard(m, position, inSheet = false, next = null) {
       <span class="spacer"></span>
       ${inSheet ? nextButton(next) : `<button class="btn" data-action="triage-skip" data-key="m${m.id}">Passer</button>`}
     </div>
+  </section>`;
+}
+
+// Fenêtre de vérification : propositions à valider, et choix déjà faits (annulables).
+export function sendersSheetHtml() {
+  const rules = Object.entries(state.senderRules);
+  const info = rules.filter(([, r]) => r === 'info').map(([s]) => s).sort();
+  const action = rules.filter(([, r]) => r === 'action').map(([s]) => s).sort();
+  const sugg = state.senderSuggestions;
+  const undo = s => `<button class="btn small-btn ghost" data-action="sender-rule" data-sender="${esc(s)}" data-rule="none">Annuler</button>`;
+  return `
+  <section class="senders-sheet" aria-label="Expéditeurs pour info">
+    <h2>Expéditeurs « Pour info »</h2>
+    <p class="muted small">Leurs prochains messages arrivent directement en « Pour info », sans proposition d'action. Rien n'y entre sans ton accord. Ton choix s'applique à la synchronisation suivante.</p>
+    ${sugg.length ? `
+    <div class="week-block">
+      <p class="label">À valider · ${sugg.length}</p>
+      <ul class="week-list">${sugg.map(x => `
+        <li>
+          <span><b>${esc(x.sender)}</b> <span class="muted small">· archivé ${x.archived} fois${x.lastReceived ? `, dernier message ${esc(agoLabel(x.lastReceived))}` : ''}</span></span>
+          <span class="week-btns">
+            <button class="btn small-btn" data-action="sender-rule" data-sender="${esc(x.sender)}" data-rule="info">Pour info</button>
+            <button class="btn small-btn" data-action="sender-rule" data-sender="${esc(x.sender)}" data-rule="action">Non, à traiter</button>
+          </span>
+        </li>`).join('')}</ul>
+    </div>` : ''}
+    <div class="week-block">
+      <p class="label">Toujours pour info · ${info.length}</p>
+      ${info.length ? `<ul class="week-list">${info.map(s => `<li class="row-line"><b>${esc(s)}</b>${undo(s)}</li>`).join('')}</ul>` : '<p class="empty">Aucun pour l\'instant.</p>'}
+    </div>
+    ${action.length ? `
+    <div class="week-block">
+      <p class="label">Toujours à traiter · ${action.length}</p>
+      <ul class="week-list">${action.map(s => `<li class="row-line"><b>${esc(s)}</b>${undo(s)}</li>`).join('')}</ul>
+    </div>` : ''}
   </section>`;
 }
 
