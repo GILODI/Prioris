@@ -9,6 +9,7 @@ import { versionAffichee } from '../update.js';
 
 function requestsCard() {
   const open = openRequests();
+  if (!open.length) return compactCard('req-title', 'Demandes', 'Aucune en attente', 'requests', 'Ouvrir');
   const urgent = open.filter(r => timing(r) === 'urgent');
   const soon = open.filter(r => timing(r) === 'urgent' || timing(r) === 'ok').slice(0, 3);
   return `
@@ -23,9 +24,31 @@ function requestsCard() {
           <span>${esc(r.organization || r.requester || 'Demande')}${r.eventName ? ` · ${esc(r.eventName)}` : ''}</span>
           ${deadlineChip(r)}
         </button></li>`).join('')}
-      </ul>` : `<p class="empty">Aucune demande en attente. Réponse au plus tard ${LEAD_DAYS} jours avant l'événement.</p>`}
+      </ul>` : `<p class="empty">Rien d'urgent. Réponse au plus tard ${LEAD_DAYS} jours avant l'événement.</p>`}
       <button class="btn wide" data-action="go" data-view="requests">Ouvrir les demandes</button>
     </section>`;
+}
+
+// Carte réduite à une ligne quand il n'y a rien à montrer : elle ne prend plus un bloc entier
+function compactCard(id, title, text, view, label) {
+  return `
+    <section class="card compact" aria-labelledby="${id}">
+      <div class="card-head"><h2 id="${id}">${title}</h2><span class="muted small">${text}</span></div>
+      ${view ? `<button class="btn small-btn" data-action="go" data-view="${view}">${label}</button>` : ''}
+    </section>`;
+}
+
+// Bande de synthèse sous le titre : ce qui attend une décision, visible sans faire défiler
+function glanceStrip({ urgentMessages, toSortMessages, requestsOpen, requestsUrgent, relances }) {
+  const plural = (n, un, plus) => `${n} ${n > 1 ? plus : un}`;
+  const chips = [];
+  if (urgentMessages) chips.push(`<button class="glance-item red" data-action="go" data-view="inbox">${plural(urgentMessages, 'urgent', 'urgents')}</button>`);
+  if (toSortMessages) chips.push(`<button class="glance-item" data-action="go" data-view="inbox">${toSortMessages} à trier</button>`);
+  if (requestsOpen) chips.push(`<button class="glance-item${requestsUrgent ? ' red' : ''}" data-action="go" data-view="requests">${plural(requestsOpen, 'demande', 'demandes')}${requestsUrgent ? ` · ${requestsUrgent} urgente${requestsUrgent > 1 ? 's' : ''}` : ''}</button>`);
+  if (relances) chips.push(`<button class="glance-item amber" data-action="go" data-view="tasks">${plural(relances, 'relance', 'relances')}</button>`);
+  return chips.length
+    ? `<nav class="glance" aria-label="À traiter en priorité">${chips.join('')}</nav>`
+    : `<p class="glance-none muted small">Rien à trier, aucune demande, aucune relance.</p>`;
 }
 
 export function renderHome() {
@@ -49,6 +72,15 @@ export function renderHome() {
     .filter(t => t.waiting)
     .sort((a, b) => (a.waitingSince || '').localeCompare(b.waitingSince || ''));
 
+  const requestsOpen = state.requestsAvailable || state.requests.length ? openRequests() : [];
+  const glance = glanceStrip({
+    urgentMessages: urgentCount,
+    toSortMessages: q.main.length,
+    requestsOpen: requestsOpen.length,
+    requestsUrgent: requestsOpen.filter(r => timing(r) === 'urgent').length,
+    relances: waiting.filter(t => { const d = daysSince(t.waitingSince); return d !== null && d > 5; }).length,
+  });
+
   const status = !state.ready ? 'Chargement…'
     : state.online ? 'Synchronisé' : 'Hors ligne · copie locale';
 
@@ -61,6 +93,8 @@ export function renderHome() {
     <h1>Bonjour Alex</h1>
     <p class="muted"><span class="first-cap">${esc(longDate())}</span> · <span class="sync ${state.online ? 'on' : ''}">${status}</span></p>
   </header>
+
+  ${state.ready ? glance : ''}
 
   ${state.ready && state.online && !state.schemaV2 ? `
   <div class="notice">
@@ -104,19 +138,19 @@ export function renderHome() {
 
     ${state.requestsAvailable || state.requests.length ? requestsCard() : ''}
 
-    <section class="card" aria-labelledby="due-title">
+    ${deadlines.length ? `<section class="card" aria-labelledby="due-title">
       <div class="card-head"><h2 id="due-title">Échéances</h2><span class="muted small">7 jours</span></div>
-      ${deadlines.length ? `<ul class="mini-list">
+      <ul class="mini-list">
         ${deadlines.slice(0, 5).map(t => `<li><button class="link-row" data-action="edit" data-id="${t.id}">
           <span>${esc(t.c ? `${t.c} : ${t.t}` : t.t)}</span>
           <span class="chip ${daysUntil(t.due) <= 0 ? 'red' : daysUntil(t.due) <= 3 ? 'amber' : ''}">${esc(dueLabel(t.due))}</span>
         </button></li>`).join('')}
-      </ul>` : '<p class="empty">Aucune échéance cette semaine.</p>'}
-    </section>
+      </ul>
+    </section>` : compactCard('due-title', 'Échéances', 'Aucune cette semaine')}
 
-    <section class="card" aria-labelledby="wait-title">
+    ${waiting.length ? `<section class="card" aria-labelledby="wait-title">
       <div class="card-head"><h2 id="wait-title">En attente de retour</h2><span class="big-num">${waiting.length}</span></div>
-      ${waiting.length ? `<ul class="mini-list">
+      <ul class="mini-list">
         ${waiting.slice(0, 4).map(t => {
           const d = daysSince(t.waitingSince);
           return `<li><button class="link-row" data-action="edit" data-id="${t.id}">
@@ -124,16 +158,16 @@ export function renderHome() {
             <span class="${d !== null && d > 5 ? 'warn' : 'muted'} small">${d === null ? '' : d > 5 ? `${d} j · relancer ?` : `${d} j`}</span>
           </button></li>`;
         }).join('')}
-      </ul>` : '<p class="empty">Personne ne te doit de réponse.</p>'}
-    </section>
+      </ul>
+    </section>` : compactCard('wait-title', 'En attente de retour', 'Personne ne te doit de réponse')}
 
-    <section class="card" aria-labelledby="idea-title">
+    ${state.ideas.length ? `<section class="card" aria-labelledby="idea-title">
       <div class="card-head"><h2 id="idea-title">Idées</h2><span class="big-num">${state.ideas.length}</span></div>
-      ${state.ideas.length ? `<ul class="mini-list">
+      <ul class="mini-list">
         ${state.ideas.slice(0, 2).map(i => `<li class="idea-mini"><span>${esc(i.text)}</span><span class="muted small">${esc(shortDateTime(i.createdAt))}</span></li>`).join('')}
-      </ul>` : '<p class="empty">Une idée en tête ? Le bouton + la garde ici, sans l\'ajouter à tes tâches.</p>'}
+      </ul>
       <button class="btn wide" data-action="go" data-view="ideas">Ouvrir la boîte à idées</button>
-    </section>
+    </section>` : compactCard('idea-title', 'Idées', 'Le bouton + les garde ici', 'ideas', 'Ouvrir')}
   </div>
   ${weekVisible() ? '' : `<p class="account"><button class="btn" data-action="week-show">Voir le bilan de la semaine</button></p>`}
   ${state.user ? `<p class="account muted small">Connecté : ${esc(state.user)} · <button class="link" data-action="sign-out">Se déconnecter</button></p>` : ''}
