@@ -10,6 +10,7 @@ import { openCapture, openEdit, closeSheet, isOpen, updateCapturePreview, openFo
 import { startDictation, stopDictation, isListening } from './dictation.js';
 import { today, addDays, dueLabel } from './dates.js';
 import { showWeek, hideWeek, POSTPONE_DAYS } from './views/week.js';
+import { initUpdates } from './update.js';
 
 const VIEWS = {
   home: { hash: 'accueil', render: renderHome },
@@ -514,6 +515,4 @@ store.subscribe(render);
 render();
 store.init();
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(err => console.error('SW', err)));
-}
+initUpdates(render);

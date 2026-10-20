@@ -62,6 +62,17 @@ D'où le `Cache-Control: no-store` dans `vercel.json` et le service worker en
 service worker, comprendre cet historique** — et tester sur un appareil réel,
 pas seulement en navigation privée.
 
+*Mises à jour de l'application installée* (octobre 2026) : une application
+installée sur téléphone est reprise, pas rechargée, donc elle gardait le code
+chargé des jours plus tôt malgré le `no-store`. `js/update.js` compare à chaque
+retour au premier plan la version déployée (la constante `CACHE` de `sw.js`) à
+celle de la page et affiche un bandeau « Nouvelle version disponible ». La
+version figure en bas de l'accueil. **Conséquence : augmenter `CACHE` dans
+`sw.js` à chaque déploiement qui change l'application**, sinon ni le bandeau
+ni la purge des anciens caches ne se déclenchent. Le service worker bascule
+aussi sur la copie locale si le réseau met plus de 5 secondes à répondre ; une
+copie plus ancienne que le déploiement peut alors être servie un court instant.
+
 **Accès à la base, réservé au compte d'Alex.** Depuis la v2 (octobre 2026,
 `sql/2026-10-etape2-verrouillage.sql`), l'ancienne policy `"Accès complet anon"` est
 remplacée par `"Compte Prioris uniquement"` : seul le compte

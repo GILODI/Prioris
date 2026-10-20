@@ -5,6 +5,7 @@ import { esc, taskRow } from '../ui.js';
 import { queues } from './inbox.js';
 import { openRequests, timing, deadlineChip, KINDS, LEAD_DAYS } from './requests.js';
 import { weekCard, weekVisible } from './week.js';
+import { versionAffichee } from '../update.js';
 
 function requestsCard() {
   const open = openRequests();
@@ -135,5 +136,6 @@ export function renderHome() {
     </section>
   </div>
   ${weekVisible() ? '' : `<p class="account"><button class="btn" data-action="week-show">Voir le bilan de la semaine</button></p>`}
-  ${state.user ? `<p class="account muted small">Connecté : ${esc(state.user)} · <button class="link" data-action="sign-out">Se déconnecter</button></p>` : ''}`;
+  ${state.user ? `<p class="account muted small">Connecté : ${esc(state.user)} · <button class="link" data-action="sign-out">Se déconnecter</button></p>` : ''}
+  ${versionAffichee() ? `<p class="account muted small">Version ${esc(versionAffichee().replace(/^prioris-/, ''))}</p>` : ''}`;
 }
