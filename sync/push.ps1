@@ -5,13 +5,16 @@
 #   -Action keys    : écrit la liste des messages déjà importés (source_key) dans -Out
 #   -Action index   : écrit pour chaque message déjà importé sa clé, sa source, sa date et son
 #                     expéditeur (jamais le contenu) ; sert à extract.ps1 à retrouver les mails résumés
+#   -Action delete-keys : supprime (vide le contenu, garde la clé) les messages dont les clés sont
+#                     dans le fichier -File (tableau JSON de source_key), validées par Alex.
+#                     Voir sync/NETTOYAGE.md. Irréversible.
 #   -Action insert  : envoie les messages de -File (tableau JSON) dans « À trier »
 #   -Action request-keys    : écrit la liste des demandes déjà importées dans -Out
 #   -Action insert-requests : envoie les demandes de -File (tableau JSON) dans « Demandes »
 #   -Action archived-senders : écrit les expéditeurs validés « toujours pour info » dans -Out
 #   -Action action-senders   : écrit les expéditeurs « toujours à traiter » dans -Out
 param(
-  [ValidateSet('check', 'keys', 'index', 'insert', 'request-keys', 'insert-requests', 'archived-senders', 'action-senders')][string]$Action = 'check',
+  [ValidateSet('check', 'keys', 'index', 'delete-keys', 'insert', 'request-keys', 'insert-requests', 'archived-senders', 'action-senders')][string]$Action = 'check',
   [string]$File,
   [string]$Out = (Join-Path $PSScriptRoot 'out\existing-keys.json')
 )
@@ -70,6 +73,20 @@ switch ($Action) {
     $entries = @(Call-Rpc 'prioris_import_index' @{ p_token = $token } | ForEach-Object { $_ } | Where-Object { $_ })
     Write-Utf8 $Out (ConvertTo-Json -InputObject @($entries) -Depth 3)
     Write-Output ("{0} messages déjà importés (clé, date, expéditeur) -> {1}" -f $entries.Count, $Out)
+  }
+  'delete-keys' {
+    if (-not $File -or -not (Test-Path $File)) { throw "Fichier des clés introuvable : $File" }
+    $parsed = ConvertFrom-Json -InputObject (Get-Content -Raw -Encoding UTF8 $File)
+    $keys = @($parsed | ForEach-Object { $_ } | Where-Object { $_ -is [string] -and $_ -match '^(mail|wa)-[0-9A-F]{20}$' })
+    $total = @($parsed | ForEach-Object { $_ }).Count
+    if ($keys.Count -ne $total) { throw "Le fichier contient des valeurs qui ne sont pas des clés de message ($($total - $keys.Count))." }
+    if (-not $keys.Count) { Write-Output 'Aucune clé à supprimer.'; break }
+    $deleted = 0
+    for ($i = 0; $i -lt $keys.Count; $i += 100) {
+      $batch = @($keys[$i..([Math]::Min($i + 99, $keys.Count - 1))])
+      $deleted += [int](Call-Rpc 'prioris_delete_keys' @{ p_token = $token; p_keys = $batch })
+    }
+    Write-Output ("{0} clés envoyées, {1} messages supprimés (les autres n'étaient plus à trier ni archivés)." -f $keys.Count, $deleted)
   }
   'insert' {
     if (-not $File -or -not (Test-Path $File)) { throw "Fichier à envoyer introuvable : $File" }
