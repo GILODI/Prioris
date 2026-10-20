@@ -1,6 +1,6 @@
 // Données de Prioris : tâches et idées, synchronisées avec Supabase (temps réel),
 // avec une copie locale pour démarrer vite et fonctionner hors ligne.
-import { today, daysUntil } from './dates.js';
+import { today, addDays, daysUntil } from './dates.js';
 
 const CACHE_KEY = 'prioris_v2_cache';
 
@@ -199,6 +199,7 @@ async function loadRemote() {
   }
   state.ready = true;
   emit();
+  if (state.online) archiveOldInfo();
 }
 
 function listenRealtime() {
@@ -229,7 +230,7 @@ function listenRealtime() {
       state.inbox = state.inbox.filter(x => x.id !== id);
       if (state.inboxHistory) state.inboxHistory = state.inboxHistory.filter(x => x.id !== id);
       if (row && row.status === 'new') state.inbox.push(inboxFromRow(row));
-      else if (row && state.inboxHistory) state.inboxHistory.unshift(inboxFromRow(row));
+      else if (row && row.status !== 'deleted' && state.inboxHistory) state.inboxHistory.unshift(inboxFromRow(row));
       emit();
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, payload => {
@@ -325,11 +326,46 @@ export function undoIgnoreInbox(items) {
     .then(({ error }) => { if (error) report(error, 'L\'archivage n\'a pas pu être annulé dans la base.'); });
 }
 
+// Supprime des messages sans intérêt. Différent de l'archivage (« traité, à garder ») : le résumé,
+// l'objet, l'action et le brouillon sont effacés, et le message disparaît partout (historique et
+// bilan compris). Il reste une ligne minimale (clé, date, expéditeur) : sans elle, la prochaine
+// synchronisation retrouverait le mail dans Excel et le réimporterait. Irréversible.
+// Les messages devenus une tâche ne sont pas supprimables. Renvoie le nombre de messages supprimés.
+export function deleteInboxMany(ids) {
+  const pool = [...state.inbox, ...(state.inboxHistory || [])];
+  const items = pool.filter(x => ids.includes(x.id) && x.status !== 'task');
+  if (!items.length) return 0;
+  const gone = items.map(i => i.id);
+  state.inbox = state.inbox.filter(x => !gone.includes(x.id));
+  if (state.inboxHistory) state.inboxHistory = state.inboxHistory.filter(x => !gone.includes(x.id));
+  emit();
+  if (sb) {
+    sb.from('inbox_items').update({
+      status: 'deleted', summary: '', subject: '', proposed_action: '', proposed_priority: null,
+      proposed_due: null, draft_reply: '', urgent: false, urgency_reason: '', needs_action: false,
+    }).in('id', gone)
+      .then(({ error }) => { if (error) report(error, 'La suppression n\'a pas été enregistrée dans la base. La mise à jour SQL « suppression-messages » est-elle faite ?'); });
+  }
+  return items.length;
+}
+
+// Messages « pour info » trop anciens : archivés tout seuls au chargement (annulable depuis la notification).
+export const AUTO_ARCHIVE_DAYS = 14;
+const autoArchiveListeners = new Set();
+export function onAutoArchive(fn) { autoArchiveListeners.add(fn); }
+
+export function archiveOldInfo() {
+  const cut = addDays(today(), -AUTO_ARCHIVE_DAYS);
+  const ids = state.inbox.filter(i => !i.needsAction && !i.urgent && i.receivedOn && i.receivedOn < cut).map(i => i.id);
+  const items = ids.length ? ignoreInboxMany(ids) : [];
+  if (items.length) autoArchiveListeners.forEach(fn => fn(items));
+}
+
 // --- Historique : messages déjà traités (chargés à la demande) ---
 
 export async function loadInboxHistory() {
   if (!sb) { state.inboxHistory = []; return; }
-  const { data, error } = await sb.from('inbox_items').select('*').neq('status', 'new')
+  const { data, error } = await sb.from('inbox_items').select('*').neq('status', 'new').neq('status', 'deleted')
     .order('received_on', { ascending: false }).limit(1000);
   if (error) { report(error, 'L\'historique des messages n\'a pas pu être chargé.'); return; }
   state.inboxHistory = data.map(inboxFromRow);

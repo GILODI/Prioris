@@ -45,6 +45,10 @@ de lignes. `key_match` indique comment :
 | `nouvelle` | aucun message de Prioris ne correspond : mail à importer (sauf statut « Traité ») |
 | `sans-index` | mode `-SansIndex`, à ne pas utiliser en synchronisation |
 
+Les messages supprimés dans Prioris (bouton « Supprimer ») gardent leur ligne en base, vidée de son
+contenu, avec la clé, la date et l'expéditeur : ils figurent donc dans `existing-keys.json` et
+dans l'index, et ne sont jamais réimportés. Ne rien faire de plus pour eux.
+
 Limite connue : si un mail de même date et même expéditeur qu'un message déjà importé, mais sorti
 du classeur (passé dans « Traités »), arrive **déjà résumé**, il est pris pour ce message
 et n'est pas importé. Rare ; le compte rendu signale les mails « rapprochés » pour que ce soit visible.

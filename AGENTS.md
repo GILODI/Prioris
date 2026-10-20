@@ -43,7 +43,12 @@ Ces règles viennent de la collaboration sur l'autre projet d'Alex
   qu'elle touche.
 - **Ne jamais supprimer de données.** Si quelque chose doit disparaître, on
   privilégie l'anonymisation ou le marquage plutôt que l'effacement — et on
-  explique pourquoi.
+  explique pourquoi. *Exception décidée avec Alex (octobre 2026) :* le bouton
+  « Supprimer » des messages à trier vide le résumé, l'objet, l'action et le
+  brouillon (statut `deleted`), mais **garde la ligne** avec la clé, la date et
+  l'expéditeur. Sans elle, la synchronisation réimporterait le mail depuis
+  Excel. Ne jamais effacer ces lignes, et les prendre en compte dans toute
+  nouvelle requête sur `inbox_items` (exclure `deleted` de ce qui s'affiche).
 - **Vérifier avant d'affirmer.** Tester réellement (requête, script, page
   ouverte) plutôt que supposer. Quand une vérification est impossible, le
   dire clairement au lieu de laisser croire que c'est validé.

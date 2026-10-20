@@ -90,6 +90,35 @@ export function queues(source = 'all') {
   return { main: [...main, ...tasks], older, info, history };
 }
 
+const OLD_DAYS = 14;
+
+// Anciens messages à traiter (« Plus anciens ») de plus de OLD_DAYS jours : nettoyage en un geste.
+export function oldBacklogIds() {
+  const cut = addDays(today(), -OLD_DAYS);
+  return queues(prefs.source).older.filter(e => e.item.receivedOn && e.item.receivedOn < cut).map(e => e.item.id);
+}
+export const oldBacklogDays = OLD_DAYS;
+
+const senderKey = s => String(s || '').trim().toLowerCase();
+
+// Autres messages du même expéditeur déjà classés « Pour info » ou « Plus anciens » : jamais les
+// messages à traiter récents ni les urgents, pour ne rien archiver d'important par erreur.
+export function senderBacklogIds(sender, exceptId) {
+  const q = queues('all');
+  return [...q.older, ...q.info]
+    .filter(e => e.item.id !== exceptId && senderKey(e.item.sender) === senderKey(sender) && senderKey(sender))
+    .map(e => e.item.id);
+}
+
+function senderBacklogHtml(m) {
+  const n = senderBacklogIds(m.sender, m.id).length;
+  if (!n) return '';
+  const name = esc(m.sender);
+  return `<p class="sender-bulk muted small">${n} autre${n > 1 ? 's' : ''} message${n > 1 ? 's' : ''} de ${name} en « Pour info » ou « Plus anciens » :
+    <button class="link" data-action="inbox-sender-archive" data-id="${m.id}">tout archiver</button>
+    · <button class="link danger" data-action="inbox-sender-delete" data-id="${m.id}">tout supprimer</button></p>`;
+}
+
 function ordered(list) {
   return [...list.filter(e => !skipped.includes(e.key)), ...list.filter(e => skipped.includes(e.key))];
 }
@@ -196,10 +225,13 @@ function listHtml(entries) {
       ${tab === 'history'
         ? `<button class="btn small-btn primary" data-action="inbox-bulk-restore"${n ? '' : ' disabled'}>Remettre à trier${n ? ` (${n})` : ''}</button>`
         : `<button class="btn small-btn primary" data-action="inbox-bulk-archive"${n ? '' : ' disabled'}>Archiver${n ? ` (${n})` : ''}</button>`}
+      <button class="btn small-btn danger" data-action="inbox-bulk-delete"${n ? '' : ' disabled'}>Supprimer${n ? ` (${n})` : ''}</button>
       <button class="btn small-btn ghost" data-action="inbox-select-stop">Terminer</button>
     </div>`
     : `<div class="list-head"><p class="muted small">${shown.length} élément${shown.length > 1 ? 's' : ''}</p>
-      <button class="pill" data-action="inbox-select-start">Sélectionner</button></div>`;
+      <button class="pill" data-action="inbox-select-start">Sélectionner</button></div>
+      ${tab === 'older' && oldBacklogIds().length ? `<p class="muted small">${oldBacklogIds().length} message${oldBacklogIds().length > 1 ? 's' : ''} de plus de ${OLD_DAYS} jours.
+        <button class="link" data-action="inbox-archive-old">Tout archiver</button></p>` : ''}`;
   return `${head}
   <ul class="msg-list">${shown.map(rowHtml).join('')}</ul>`;
 }
@@ -322,8 +354,10 @@ function messageCard(m, position, inSheet = false, next = null) {
       ${requestLink(m)}
     </div>
     ${senderRuleHtml(m.sender)}
+    ${senderBacklogHtml(m)}
     <div class="triage-foot">
       <button class="btn ghost" data-action="inbox-ignore" data-id="${m.id}">${m.needsAction ? 'Pas de tâche' : 'Archiver'}</button>
+      <button class="btn ghost danger" data-action="inbox-delete" data-id="${m.id}">Supprimer</button>
       <span class="spacer"></span>
       ${inSheet ? nextButton(next) : `<button class="btn" data-action="triage-skip" data-key="m${m.id}">Passer</button>`}
     </div>
@@ -404,6 +438,7 @@ function historyCard(m, position = '', next = null) {
     <div class="triage-extra">${requestLink(m)}</div>
     <div class="triage-foot">
       <button class="btn" data-action="inbox-restore" data-id="${m.id}">Remettre à trier</button>
+      ${m.status === 'task' ? '' : `<button class="btn ghost danger" data-action="inbox-delete" data-id="${m.id}">Supprimer</button>`}
       <span class="spacer"></span>
       ${nextButton(next)}
     </div>

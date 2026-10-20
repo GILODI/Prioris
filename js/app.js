@@ -1,7 +1,7 @@
 // Point d'entrée : navigation entre les écrans, actions, ajout rapide, messages.
 import * as store from './store.js';
 import { renderHome } from './views/home.js';
-import { renderInbox, skipItem, setInboxTab, setInboxMode, setInboxSource, setInboxSearch, refreshInboxList, entrySheetHtml, queues, nextEntryKey, inboxTabLabel, startSelecting, clearSelection, toggleSelected, toggleSelectAll, selectedIds, senderRuleHtml, sendersSheetHtml } from './views/inbox.js';
+import { renderInbox, skipItem, setInboxTab, setInboxMode, setInboxSource, setInboxSearch, refreshInboxList, entrySheetHtml, queues, nextEntryKey, inboxTabLabel, startSelecting, clearSelection, toggleSelected, toggleSelectAll, selectedIds, senderRuleHtml, sendersSheetHtml, oldBacklogIds, senderBacklogIds } from './views/inbox.js';
 import { renderTasks, setFilter, toggleCollapse, toggleDoneList } from './views/tasks.js';
 import { renderIdeas } from './views/ideas.js';
 import { renderLogin, login, rememberEmail } from './views/login.js';
@@ -238,6 +238,45 @@ const actions = {
   'inbox-ignore': el => {
     const id = Number(el.dataset.id);
     triageMessage(id, () => store.ignoreInboxMany([id]), 'Classé sans tâche.', '', items => store.undoIgnoreInbox(items));
+  },
+  // Suppression : effacée pour de bon (pas d'annulation), donc confirmation en deux temps.
+  'inbox-delete': el => {
+    if (!armed(el, 'Confirmer la suppression')) return;
+    const id = Number(el.dataset.id);
+    triageMessage(id, () => store.deleteInboxMany([id]), 'Message supprimé.');
+  },
+  'inbox-bulk-delete': el => {
+    const n = selectedIds().length;
+    if (!n) return;
+    if (!armed(el, `Confirmer : supprimer ${n}`)) return;
+    const done = store.deleteInboxMany(selectedIds());
+    clearSelection();
+    render();
+    toast(done ? `${done} message${done > 1 ? 's' : ''} supprimé${done > 1 ? 's' : ''}.` : 'Rien à supprimer : ces messages ont déjà une tâche.');
+  },
+  'inbox-archive-old': () => {
+    const items = store.ignoreInboxMany(oldBacklogIds());
+    if (!items.length) return;
+    render();
+    toast(`${items.length} ancien${items.length > 1 ? 's' : ''} message${items.length > 1 ? 's' : ''} archivé${items.length > 1 ? 's' : ''}.`, '', () => store.undoIgnoreInbox(items));
+  },
+  'inbox-sender-archive': el => {
+    const m = store.state.inbox.find(x => x.id === Number(el.dataset.id));
+    if (!m) return;
+    const items = store.ignoreInboxMany(senderBacklogIds(m.sender, m.id));
+    if (!items.length) return;
+    render();
+    if (isOpen()) closeSheet();
+    toast(`${items.length} message${items.length > 1 ? 's' : ''} de ${m.sender} archivé${items.length > 1 ? 's' : ''}.`, '', () => store.undoIgnoreInbox(items));
+  },
+  'inbox-sender-delete': el => {
+    if (!armed(el, 'Confirmer la suppression')) return;
+    const m = store.state.inbox.find(x => x.id === Number(el.dataset.id));
+    if (!m) return;
+    const n = store.deleteInboxMany(senderBacklogIds(m.sender, m.id));
+    render();
+    if (isOpen()) closeSheet();
+    toast(`${n} message${n > 1 ? 's' : ''} de ${m.sender} supprimé${n > 1 ? 's' : ''}.`);
   },
   'inbox-restore': el => {
     const id = Number(el.dataset.id);
@@ -511,6 +550,10 @@ window.addEventListener('hashchange', () => { current = viewFromHash(); render()
 document.getElementById('fab').addEventListener('click', () => openCapture('task'));
 
 store.onError(msg => toast(msg, 'bad'));
+store.onAutoArchive(items => {
+  const n = items.length;
+  toast(`${n} message${n > 1 ? 's' : ''} « pour info » de plus de ${store.AUTO_ARCHIVE_DAYS} jours archivé${n > 1 ? 's' : ''}.`, '', () => store.undoIgnoreInbox(items));
+});
 store.subscribe(render);
 render();
 store.init();
