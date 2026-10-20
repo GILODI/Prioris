@@ -3,13 +3,15 @@
 # seulement de lister les messages déjà importés et d'en ajouter. Il n'est jamais affiché.
 #   -Action check   : vérifie la connexion et le jeton
 #   -Action keys    : écrit la liste des messages déjà importés (source_key) dans -Out
+#   -Action index   : écrit pour chaque message déjà importé sa clé, sa source, sa date et son
+#                     expéditeur (jamais le contenu) ; sert à extract.ps1 à retrouver les mails résumés
 #   -Action insert  : envoie les messages de -File (tableau JSON) dans « À trier »
 #   -Action request-keys    : écrit la liste des demandes déjà importées dans -Out
 #   -Action insert-requests : envoie les demandes de -File (tableau JSON) dans « Demandes »
 #   -Action archived-senders : écrit les expéditeurs validés « toujours pour info » dans -Out
 #   -Action action-senders   : écrit les expéditeurs « toujours à traiter » dans -Out
 param(
-  [ValidateSet('check', 'keys', 'insert', 'request-keys', 'insert-requests', 'archived-senders', 'action-senders')][string]$Action = 'check',
+  [ValidateSet('check', 'keys', 'index', 'insert', 'request-keys', 'insert-requests', 'archived-senders', 'action-senders')][string]$Action = 'check',
   [string]$File,
   [string]$Out = (Join-Path $PSScriptRoot 'out\existing-keys.json')
 )
@@ -62,6 +64,12 @@ switch ($Action) {
     $keys = @(Call-Rpc 'prioris_import_keys' @{ p_token = $token } | ForEach-Object { $_ } | Where-Object { $_ })
     Write-Utf8 $Out (ConvertTo-Json -InputObject @($keys))
     Write-Output ("{0} messages déjà importés -> {1}" -f $keys.Count, $Out)
+  }
+  'index' {
+    if (-not $PSBoundParameters.ContainsKey('Out')) { $Out = Join-Path $PSScriptRoot 'out\existing-index.json' }
+    $entries = @(Call-Rpc 'prioris_import_index' @{ p_token = $token } | ForEach-Object { $_ } | Where-Object { $_ })
+    Write-Utf8 $Out (ConvertTo-Json -InputObject @($entries) -Depth 3)
+    Write-Output ("{0} messages déjà importés (clé, date, expéditeur) -> {1}" -f $entries.Count, $Out)
   }
   'insert' {
     if (-not $File -or -not (Test-Path $File)) { throw "Fichier à envoyer introuvable : $File" }

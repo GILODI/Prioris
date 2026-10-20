@@ -25,7 +25,34 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\communication\Docu
 
 Produit `sync\out\messages.json` : un tableau d'objets
 `source` (mail | whatsapp), `source_key`, `received_on` (AAAA-MM-JJ), `sender`, `subject`,
-`content`, `excel_action`, `excel_status`, `excel_reply`, `excel_priority`, `excel_row`.
+`content`, `excel_action`, `excel_status`, `excel_reply`, `excel_priority`, `excel_row`, et pour
+les mails `key_match` (voir ci-dessous).
+
+Le script interroge lui-même Supabase (fonction `prioris_import_index`, écrite dans
+`sync\out\existing-index.json`) pour retrouver la clé des mails déjà importés. S'il échoue parce que
+cette fonction n'existe pas encore, **s'arrêter** et rapporter le message : Alex doit d'abord
+exécuter `sql/2026-10-cles-stables.sql` dans Supabase. Ne pas contourner avec `-SansIndex`.
+
+**Clés des mails.** Le classeur ne contient aucun identifiant de message et la colonne C change
+quand la compétence « synthese » remplace le mail brut par un résumé. La clé d'un mail est donc
+fixée à son premier import, puis retrouvée à chaque lecture par la date, l'expéditeur et le nombre
+de lignes. `key_match` indique comment :
+
+| `key_match` | Sens |
+|---|---|
+| `exacte` | la clé recalculée existe déjà dans Prioris |
+| `rapprochee` | le mail a été résumé depuis son import : il reprend la clé du message de Prioris de même date et même expéditeur. Déjà importé, rien à faire |
+| `nouvelle` | aucun message de Prioris ne correspond : mail à importer (sauf statut « Traité ») |
+| `sans-index` | mode `-SansIndex`, à ne pas utiliser en synchronisation |
+
+Limite connue : si un mail de même date et même expéditeur qu'un message déjà importé, mais sorti
+du classeur (passé dans « Traités »), arrive **déjà résumé**, il est pris pour ce message
+et n'est pas importé. Rare ; le compte rendu signale les mails « rapprochés » pour que ce soit visible.
+
+**Clés WhatsApp.** Une conversation = une ligne, avec la date du dernier message. La clé contient
+cette date : un nouveau message dans le fil change la date, donc la clé, et la conversation
+revient dans « À trier » comme un nouvel état du fil. C'est voulu (constaté le 20/10/2026 : tous
+les fils concernés avaient une date plus récente et un statut « À traiter »).
 
 ### 2. Récupérer ce qui est déjà dans Prioris
 
@@ -147,7 +174,7 @@ message dans « À trier ».
 
 ### 7. Rendre compte, en 9 lignes maximum
 
-- nombre de messages importés (mails / WhatsApp) ;
+- nombre de messages importés (mails / WhatsApp), et combien de mails `rapprochee` (déjà importés, résumés depuis) ;
 - nombre de demandes repérées (sponsoring / lots / visuels) ;
 - nombre de messages classés « pour info » parce qu'Alex a validé leur expéditeur ;
 - nombre d'urgents, et les 3 plus urgents en une ligne chacun (expéditeur : action) ;
