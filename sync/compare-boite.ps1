@@ -1,4 +1,4 @@
-# Compare les messages de Prioris à la boîte Outlook lue dans le navigateur (voir NETTOYAGE.md).
+﻿# Compare les messages de Prioris à la boîte Outlook lue dans le navigateur (voir NETTOYAGE.md).
 # Entrée : -Outlook, fichier JSON de lignes [date AAAA-MM-JJ, nom affiché, objet] (sync/lire-outlook.js).
 # Sortie : -Out, les candidats à la suppression (messages de Prioris sans correspondance dans la boîte),
 # classés en groupes, et -OutA, les clés du groupe A seul (prêtes pour push.ps1 -Action delete-keys).

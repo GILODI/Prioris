@@ -87,3 +87,13 @@ plus de 300 clés d'un coup. Si la lecture d'Outlook date de plus d'une heure, l
 - ce qui a été supprimé (clés envoyées, messages supprimés) ;
 - ce qui reste à relire (groupes B et C non traités) ;
 - rappel que ces messages ne sont pas réimportés par la synchronisation.
+
+### 6. Nettoyer aussi le classeur Excel (uniquement si Alex le demande)
+\nLe classeur ne sert plus qu'à alimenter Prioris : les lignes des messages supprimés, et celles déjà « Traité », peuvent en sortir. **Exception à la règle « ne jamais modifier les classeurs », décidée avec Alex le 21/10/2026, à n'appliquer que sur sa demande explicite.**
+
+- **Sauvegarde d'abord** : copier le classeur dans le même dossier sous Traitement des mails 2026 - backup AAAA-MM-JJ avant nettoyage.xlsm.
+- **Plan** : lancer extract.ps1 sur une copie du classeur (-Folder), puis lister les lignes à supprimer (celles dont la clé vient d'être supprimée de Prioris) et à déplacer (statut « Traité »), en JSON [{ligne, action: supprimer|deplacer, date, sender, key}].
+- **Essai sur une copie** : sync\nettoyer-excel.ps1 -Classeur <copie> -Plan <plan> -Appliquer. Le script vérifie chaque ligne (date, expéditeur, statut) avant d'agir et ne touche à rien au moindre écart. Les lignes « Traité » sont copiées à la suite de l'onglet « Traités » (comme la macro du classeur) puis supprimées ; macros, tableau et listes déroulantes sont conservés.
+- **Contrôle** : relancer extract.ps1 sur le résultat : les lignes restantes doivent être exactement celles prévues, et aucun message à importer ne doit apparaître.
+- **Mise en place** : après une synchronisation (pour ne perdre aucun nouveau mail), fermer Excel puis remplacer le classeur par la copie nettoyée.
+
