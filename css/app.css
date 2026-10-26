@@ -332,3 +332,7 @@ body.logged-out .view { padding-block: calc(40px + env(safe-area-inset-top, 0px)
 .update-banner { position: fixed; left: 50%; transform: translateX(-50%); top: calc(10px + env(safe-area-inset-top, 0px)); z-index: 70; display: flex; align-items: center; gap: 12px; background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 600; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
 .update-banner[hidden] { display: none; }
 .update-banner button { background: none; border: 0; padding: 0 2px; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; white-space: nowrap; }
+
+/* --- Adresse mail d'une demande --- */
+.email-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.email-line .email { font-weight: 600; color: var(--navy); overflow-wrap: anywhere; user-select: all; }

@@ -92,7 +92,7 @@ function shown() {
     : [...inTab].sort(byReceived);
   if (!search) return list;
   const q = normWord(search);
-  return list.filter(r => normWord(`${r.organization} ${r.requester} ${r.eventName} ${r.ask} ${r.summary} ${r.notes}`).includes(q));
+  return list.filter(r => normWord(`${r.organization} ${r.requester} ${r.contactEmail || ''} ${r.eventName} ${r.ask} ${r.summary} ${r.notes}`).includes(q));
 }
 
 export function renderRequests() {
@@ -197,6 +197,9 @@ export function requestSheetHtml(r, isNew = false) {
     <h2 id="req-title">${isNew ? 'Nouvelle demande' : esc(r.organization || r.requester || 'Demande')}</h2>
     ${!isNew && t === 'urgent' ? `<p class="urgent-flag">Urgent · ${esc(urgencyText(r))}</p>` : ''}
     ${!isNew ? `<p class="muted small">${r.source === 'manuel' ? 'Saisie à la main' : r.source === 'whatsapp' ? 'WhatsApp' : 'Mail'}${r.receivedOn ? ` · reçue le ${esc(fmtDate(r.receivedOn))}` : ''}</p>` : ''}
+    ${!isNew && r.contactEmail ? `
+    <p class="email-line"><span class="email" id="req-email-${r.id}">${esc(r.contactEmail)}</span>
+      <button type="button" class="btn small-btn" data-action="copy-draft" data-target="req-email-${r.id}" data-toast="Adresse copiée : colle-la dans la recherche de ta messagerie.">Copier l'adresse</button></p>` : ''}
     ${r.summary ? `<p class="triage-text small-text">${esc(r.summary)}</p>` : ''}
     ${r.draft ? `
     <div class="draft-block">
@@ -226,6 +229,7 @@ export function requestSheetHtml(r, isNew = false) {
     <div class="form-grid">
       <label class="field">Structure <span class="optional">club, magasin, athlète…</span><input name="organization" type="text" value="${esc(r.organization)}" autocomplete="off"></label>
       <label class="field">Contact <input name="requester" type="text" value="${esc(r.requester)}" autocomplete="off"></label>
+      <label class="field">Adresse mail <span class="optional">pour retrouver le mail</span><input name="contactEmail" type="email" value="${esc(r.contactEmail || '')}" autocomplete="off" placeholder="nom@exemple.fr"></label>
       <label class="field">Événement <input name="eventName" type="text" value="${esc(r.eventName)}" autocomplete="off"></label>
       <label class="field">Date de l'événement <input name="eventDate" type="date" value="${r.eventDate || ''}"></label>
       <label class="field">Répondre avant <span class="optional">${computed ? `sinon ${esc(fmtDate(computed))}, calculé` : 'facultatif'}</span><input name="replyBy" type="date" value="${r.replyBy || ''}"></label>

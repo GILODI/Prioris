@@ -12,6 +12,7 @@ export const state = {
   inboxHistory: null,     // messages déjà traités, chargés seulement à l'ouverture de l'historique
   requests: [],           // demandes de sponsoring, de lots et de visuels (toutes, y compris closes)
   requestsAvailable: true, // false tant que la table "requests" n'existe pas
+  requestsEmail: true,    // false tant que la colonne requests.contact_email n'existe pas
   senderRules: {},        // choix par expéditeur : { 'nom en minuscules': 'info' | 'action' | 'none' }
   senderSuggestions: [],  // expéditeurs toujours archivés, à valider par Alex : [{ sender, archived, lastReceived }]
   ready: false,
@@ -77,7 +78,7 @@ const REQUEST_MAP = {
   kind: 'kind', source: 'source', sourceKey: 'source_key', inboxId: 'inbox_id', receivedOn: 'received_on',
   requester: 'requester', organization: 'organization', eventName: 'event_name', eventDate: 'event_date',
   replyBy: 'reply_by', ask: 'ask', summary: 'summary', draft: 'draft_reply', status: 'status',
-  promising: 'promising', notes: 'notes',
+  promising: 'promising', notes: 'notes', contactEmail: 'contact_email',
 };
 
 function requestFromRow(r) {
@@ -87,11 +88,15 @@ function requestFromRow(r) {
     organization: r.organization || '', eventName: r.event_name || '', eventDate: r.event_date || null,
     replyBy: r.reply_by || null, ask: r.ask || '', summary: r.summary || '', draft: r.draft_reply || '',
     status: r.status || 'new', promising: !!r.promising, notes: r.notes || '', createdAt: r.created_at || null,
+    contactEmail: r.contact_email || '',
   };
 }
 
+// Tant que la colonne contact_email n'existe pas (sql/2026-10-demandes-adresse.sql), l'adresse
+// reste sur l'appareil sans bloquer le reste de la demande.
 function requestToRow(fields) {
   const row = {};
+  if (!state.requestsEmail) { fields = { ...fields }; delete fields.contactEmail; }
   for (const k in fields) if (REQUEST_MAP[k]) row[REQUEST_MAP[k]] = fields[k] === '' && /Date|replyBy|receivedOn/.test(k) ? null : fields[k];
   return row;
 }
@@ -184,7 +189,11 @@ async function loadRemote() {
     if (inboxRes.error) { state.inboxAvailable = false; state.inbox = []; }
     else { state.inboxAvailable = true; state.inbox = inboxRes.data.map(inboxFromRow); }
     if (requestsRes.error) { state.requestsAvailable = false; state.requests = []; }
-    else { state.requestsAvailable = true; state.requests = requestsRes.data.map(requestFromRow); }
+    else {
+      state.requestsAvailable = true;
+      state.requests = requestsRes.data.map(requestFromRow);
+      state.requestsEmail = requestsRes.data.length === 0 || 'contact_email' in requestsRes.data[0];
+    }
     if (tasksRes.error) throw tasksRes.error;
     state.tasks = tasksRes.data.map(taskFromRow);
     state.schemaV2 = tasksRes.data.length === 0 || 'focus_date' in tasksRes.data[0];

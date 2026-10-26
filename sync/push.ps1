@@ -134,7 +134,7 @@ switch ($Action) {
   'insert-requests' {
     if (-not $File -or -not (Test-Path $File)) { throw "Fichier à envoyer introuvable : $File" }
     $allowed = 'kind', 'source', 'source_key', 'received_on', 'requester', 'organization', 'event_name',
-               'event_date', 'reply_by', 'ask', 'summary', 'draft_reply', 'status'
+               'event_date', 'reply_by', 'ask', 'summary', 'draft_reply', 'status', 'contact_email'
     $parsed = ConvertFrom-Json -InputObject (Get-Content -Raw -Encoding UTF8 $File)
     $items = @($parsed | ForEach-Object { $_ })
     $rows = @(foreach ($it in $items) {

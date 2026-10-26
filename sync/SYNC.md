@@ -158,6 +158,7 @@ garder qu'**une**, sur le message le plus ancien, et mentionner la relance dans 
 | `kind` | `sponsoring`, `lots` ou `visuel` |
 | `source`, `source_key`, `received_on` | recopiés du message |
 | `requester` | la personne qui écrit (nom seul) |
+| `contact_email` | adresse mail de l'expéditeur si `sender` en contient une (en minuscules), sinon vide. Ne jamais en inventer une. Pour WhatsApp, vide |
 | `organization` | la structure : club, magasin, organisateur ; pour un athlète seul, son nom. Toujours écrit de la même façon (« Au Vieux Campeur », pas « AVC »), pour que Prioris retrouve les demandes précédentes |
 | `event_name` | nom court de l'événement ou de la saison (« Contest de Dry Tooling », « Saison 2026 »), vide sinon |
 | `event_date` | AAAA-MM-JJ si la date de l'événement est citée, sinon `null`. Pour un événement sur plusieurs jours, le premier jour |

@@ -321,7 +321,7 @@ const actions = {
     if (!m) return;
     openRequestSheet({
       kind: 'sponsoring', source: m.source, sourceKey: m.sourceKey, inboxId: m.id, receivedOn: m.receivedOn,
-      requester: m.sender, summary: m.summary, draft: m.draft, replyBy: m.due,
+      requester: m.sender, contactEmail: emailIn(m.sender), summary: m.summary, draft: m.draft, replyBy: m.due,
     }, true);
   },
   'request-task': el => {
@@ -343,7 +343,7 @@ const actions = {
     const src = document.getElementById(el.dataset.target);
     if (!src) return;
     const text = src.textContent;
-    const done = () => toast('Réponse copiée.', 'good');
+    const done = () => toast(el.dataset.toast || 'Réponse copiée.', 'good');
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done).catch(() => selectText(src));
     } else selectText(src);
@@ -424,6 +424,12 @@ document.addEventListener('input', e => {
 // Fiche d'une demande ; une demande créée depuis un message garde ses champs cachés
 // (origine, brouillon) en mémoire jusqu'à l'enregistrement.
 let draftRequest = null;
+
+// Adresse mail contenue dans l'expéditeur d'un message (vide pour « Lou Thaller » ou WhatsApp).
+function emailIn(s) {
+  const m = String(s || '').match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/);
+  return m ? m[0].toLowerCase() : '';
+}
 function openRequestSheet(r, isNew = false) {
   draftRequest = isNew ? r : null;
   const full = isNew ? { requester: '', organization: '', eventName: '', eventDate: null, replyBy: null, ask: '', summary: '', draft: '', status: 'new', promising: false, notes: '', ...r } : r;
@@ -473,6 +479,7 @@ document.addEventListener('submit', e => {
       replyBy: data.get('replyBy') || null,
       ask: String(data.get('ask') || '').trim(),
       notes: String(data.get('notes') || '').trim(),
+      contactEmail: String(data.get('contactEmail') || '').trim().toLowerCase(),
     };
     if (form.dataset.id === 'new') {
       if (!fields.organization && !fields.requester) { toast('Indique au moins la structure ou le contact.'); return; }
