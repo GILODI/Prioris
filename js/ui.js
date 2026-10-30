@@ -47,9 +47,13 @@ export function zoneChip(p) {
 
 // Une ligne de tâche. opts : handle (poignée de glisser), showZone (rappel de catégorie),
 // focusButton ('add' | 'remove').
+// Origine d'un message ou d'une tâche : mail, WhatsApp ou appel téléphonique.
+const SOURCE_LABELS = { mail: 'Mail', whatsapp: 'WhatsApp', phone: 'Appel' };
+export function sourceLabel(s) { return SOURCE_LABELS[s] || ''; }
+export function sourceChip(s) { return SOURCE_LABELS[s] ? `<span class="chip src-${s}">${SOURCE_LABELS[s]}</span>` : ''; }
+
 export function taskRow(t, opts = {}) {
-  const src = t.source === 'mail' ? '<span class="chip src-mail">Mail</span>'
-    : t.source === 'whatsapp' ? '<span class="chip src-whatsapp">WhatsApp</span>' : '';
+  const src = sourceChip(t.source);
   const chips = [opts.showZone ? zoneChip(t.p) : '', src, dueChip(t.due), waitingChip(t)].join('');
   const focusBtn = opts.focusButton === 'add'
     ? `<button class="mini-btn" data-action="focus-add" data-id="${t.id}" aria-label="Ajouter au focus du jour">+ Focus</button>`

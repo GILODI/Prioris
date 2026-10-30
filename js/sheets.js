@@ -38,14 +38,48 @@ export function openFormSheet(html, focusSelector) { open(html, focusSelector); 
 
 // --- Ajout rapide : tâche ou idée ---
 
+function captureTabs(mode) {
+  return `<div class="segmented" role="tablist">
+      ${[['task', 'Tâche'], ['call', 'Appel'], ['idea', 'Idée']].map(([k, label]) => `<button type="button" role="tab" aria-selected="${mode === k}" class="${mode === k ? 'on' : ''}" data-action="capture-mode" data-mode="${k}">${label}</button>`).join('')}
+    </div>`;
+}
+
+// Appel reçu : noté ici, il arrive dans « À trier » avec les mêmes options qu'un mail.
+function openCallCapture() {
+  open(`
+  <form class="sheet" data-form="call" role="dialog" aria-modal="true" aria-labelledby="capture-title">
+    <h2 id="capture-title" class="sr-only">Noter un appel</h2>
+    ${captureTabs('call')}
+    <div class="form-grid">
+      <label class="field">Qui a appelé <input id="call-name" name="name" type="text" list="contacts-list" autocomplete="off" placeholder="Nom, club, magasin…"></label>
+      <label class="field">Numéro <span class="optional">facultatif</span><input name="phone" type="tel" autocomplete="off" placeholder="06 12 34 56 78"></label>
+    </div>
+    ${contactsDatalist()}
+    <label class="field">Ce qu'il ou elle veut
+      <span class="field-row">
+        <textarea id="call-content" name="content" rows="3" placeholder="Demande, rappel attendu, infos utiles…"></textarea>
+        <button type="button" class="mic" id="call-mic" data-action="mic" data-target="call-content" aria-label="Dicter">${ICONS.mic}</button>
+      </span>
+    </label>
+    <div class="triage-extra">
+      <label class="inline-field">Rappeler avant <input type="date" name="due"></label>
+      <label class="switch"><input type="checkbox" name="urgent"><span>Urgent</span></label>
+    </div>
+    <p class="hint">L'appel arrive dans « À trier » : tu pourras en faire une tâche, le mettre en attente, l'archiver ou en faire une demande.</p>
+    <div class="sheet-actions">
+      <span class="spacer"></span>
+      <button type="button" class="btn ghost" data-action="close-sheet">Annuler</button>
+      <button type="submit" class="btn primary">Ajouter</button>
+    </div>
+  </form>`, '#call-name');
+}
+
 export function openCapture(mode = 'task') {
+  if (mode === 'call') { openCallCapture(); return; }
   open(`
   <form class="sheet" data-form="capture" data-mode="${mode}" role="dialog" aria-modal="true" aria-labelledby="capture-title">
     <h2 id="capture-title" class="sr-only">Ajouter</h2>
-    <div class="segmented" role="tablist">
-      <button type="button" role="tab" aria-selected="${mode === 'task'}" class="${mode === 'task' ? 'on' : ''}" data-action="capture-mode" data-mode="task">Tâche</button>
-      <button type="button" role="tab" aria-selected="${mode === 'idea'}" class="${mode === 'idea' ? 'on' : ''}" data-action="capture-mode" data-mode="idea">Idée</button>
-    </div>
+    ${captureTabs(mode)}
     ${mode === 'task' ? `
     <label class="field">Contact <span class="optional">facultatif</span>
       <input id="capture-contact" name="c" type="text" list="contacts-list" autocomplete="off" placeholder="Commence à taper : Arnaud, Intersport…">

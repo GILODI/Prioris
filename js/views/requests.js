@@ -196,7 +196,7 @@ export function requestSheetHtml(r, isNew = false) {
   <form class="sheet item-sheet" data-form="request" data-id="${isNew ? 'new' : r.id}" role="dialog" aria-modal="true" aria-labelledby="req-title">
     <h2 id="req-title">${isNew ? 'Nouvelle demande' : esc(r.organization || r.requester || 'Demande')}</h2>
     ${!isNew && t === 'urgent' ? `<p class="urgent-flag">Urgent · ${esc(urgencyText(r))}</p>` : ''}
-    ${!isNew ? `<p class="muted small">${r.source === 'manuel' ? 'Saisie à la main' : r.source === 'whatsapp' ? 'WhatsApp' : 'Mail'}${r.receivedOn ? ` · reçue le ${esc(fmtDate(r.receivedOn))}` : ''}</p>` : ''}
+    ${!isNew ? `<p class="muted small">${r.source === 'manuel' ? 'Saisie à la main' : r.source === 'whatsapp' ? 'WhatsApp' : r.source === 'phone' ? 'Appel' : 'Mail'}${r.receivedOn ? ` · reçue le ${esc(fmtDate(r.receivedOn))}` : ''}</p>` : ''}
     ${!isNew && r.contactEmail ? `
     <p class="email-line"><span class="email" id="req-email-${r.id}">${esc(r.contactEmail)}</span>
       <button type="button" class="btn small-btn" data-action="copy-draft" data-target="req-email-${r.id}" data-toast="Adresse copiée : colle-la dans la recherche de ta messagerie.">Copier l'adresse</button></p>` : ''}

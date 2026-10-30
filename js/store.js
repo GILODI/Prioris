@@ -71,6 +71,7 @@ function inboxFromRow(r) {
     p: r.proposed_priority ?? null, due: r.proposed_due || null, draft: r.draft_reply || '',
     urgent: !!r.urgent, urgencyReason: r.urgency_reason || '', needsAction: r.needs_action !== false,
     status: r.status, createdAt: r.created_at || null, sourceKey: r.source_key || null,
+    phone: r.phone || '',
   };
 }
 
@@ -299,11 +300,40 @@ export async function inboxToTask(id, { p, waiting = false }) {
   const item = state.inbox.find(x => x.id === id);
   if (!item) return;
   state.inbox = state.inbox.filter(x => x.id !== id);
+  const text = item.action || item.summary;
   const task = await createTask({
-    p, c: item.sender, t: item.action || item.summary, star: item.urgent,
+    p, c: item.sender, t: item.phone ? `${text} (${item.phone})` : text, star: item.urgent,
     due: item.due, source: item.source, waiting,
   });
   setInboxStatus(id, { status: 'task', task_id: task && task.id > 0 ? task.id : null }, item);
+}
+
+// Appel téléphonique noté par Alex : il arrive dans « À trier » comme un mail ou un WhatsApp,
+// avec les mêmes options (tâche, en attente, archiver, demande).
+export async function createCall({ name, phone = '', content = '', due = null, urgent = false }) {
+  const now = new Date().toISOString();
+  const local = {
+    id: tmpId--, source: 'phone', receivedOn: today(), sender: name, subject: '', summary: content,
+    action: content ? `Rappeler : ${content}` : 'Rappeler', p: null, due, draft: '', urgent, urgencyReason: urgent ? 'noté urgent pendant l\'appel' : '',
+    needsAction: true, status: 'new', createdAt: now, sourceKey: null, phone,
+  };
+  state.inbox.push(local);
+  emit();
+  if (!sb) return local;
+  const key = 'tel-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+  const { data, error } = await sb.from('inbox_items').insert([{
+    source: 'phone', source_key: key, received_on: local.receivedOn, sender: name, phone, summary: content,
+    proposed_action: local.action, proposed_due: due, urgent, urgency_reason: local.urgencyReason, needs_action: true,
+  }]).select().single();
+  if (error) {
+    report(error, /phone|check constraint|source_check/i.test(error.message || '')
+      ? 'Appel gardé sur cet appareil : les appels demandent la mise à jour de la base (script sql/2026-10-appels.sql).'
+      : 'L\'appel est enregistré sur cet appareil mais pas synchronisé.');
+    return local;
+  }
+  state.inbox = state.inbox.filter(x => x !== local && x.id !== data.id);
+  state.inbox.push(inboxFromRow(data));
+  emit();
 }
 
 export function ignoreInbox(id) { setInboxStatus(id, { status: 'ignored' }); }

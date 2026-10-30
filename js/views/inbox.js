@@ -5,7 +5,7 @@
 // Plus anciens, Pour info, Historique (messages déjà traités).
 import { state, sortForZone, senderRule } from '../store.js';
 import { shortDateTime, addDays, today, dueLabel, agoLabel, daysUntil } from '../dates.js';
-import { esc, ZONES, zoneOf, dueChip, waitingChip } from '../ui.js';
+import { esc, ZONES, zoneOf, dueChip, waitingChip, sourceChip } from '../ui.js';
 import { normWord } from '../parse.js';
 import { requestForInbox, kindOf } from './requests.js';
 
@@ -126,7 +126,7 @@ function ordered(list) {
 function matches(e, q) {
   if (!q) return true;
   const it = e.item;
-  const hay = e.kind === 'task' ? `${it.c} ${it.t}` : `${it.sender} ${it.subject} ${it.summary} ${it.action}`;
+  const hay = e.kind === 'task' ? `${it.c} ${it.t}` : `${it.sender} ${it.phone || ''} ${it.subject} ${it.summary} ${it.action}`;
   return normWord(hay).includes(normWord(q));
 }
 
@@ -146,7 +146,7 @@ export function renderInbox() {
     ['info', 'Pour info', q.info.length],
     ['history', 'Historique', state.inboxHistory ? q.history.length : '…'],
   ];
-  const sources = [['all', 'Tout'], ['mail', 'Mails'], ['whatsapp', 'WhatsApp']];
+  const sources = [['all', 'Tout'], ['mail', 'Mails'], ['whatsapp', 'WhatsApp'], ['phone', 'Appels']];
 
   let html = `
   <header class="page-head">
@@ -248,7 +248,7 @@ function selectRowHtml(e) {
   return `<li><button class="msg-row selectable${on ? ' is-selected' : ''}" role="checkbox" aria-checked="${on}" data-action="inbox-select" data-id="${it.id}">
     <span class="row-top">
       <span class="check" aria-hidden="true">${on ? '✓' : ''}</span>
-      <span class="chip src-${it.source}">${it.source === 'whatsapp' ? 'WhatsApp' : 'Mail'}</span>
+      ${sourceChip(it.source)}
       <b>${esc(it.sender || 'Expéditeur inconnu')}</b>
       <span class="muted small row-date">${it.receivedOn ? esc(agoLabel(it.receivedOn)) : ''}</span>
     </span>
@@ -268,7 +268,7 @@ function plainRowHtml(e) {
     ? `<span class="chip ${it.status === 'task' ? 'zone z0' : ''}">${it.status === 'task' ? 'tâche créée' : 'classé sans tâche'}</span>` : '';
   return `<li><button class="msg-row${it.urgent && e.kind !== 'done' ? ' is-urgent' : ''}" data-action="open-entry" data-key="${e.key}">
     <span class="row-top">
-      <span class="chip src-${it.source}">${it.source === 'whatsapp' ? 'WhatsApp' : 'Mail'}</span>
+      ${sourceChip(it.source)}
       ${it.urgent && e.kind !== 'done' ? '<span class="chip red">urgent</span>' : ''}
       <b>${esc(it.sender || 'Expéditeur inconnu')}</b>
       <span class="muted small row-date">${it.receivedOn ? esc(agoLabel(it.receivedOn)) : ''}</span>
@@ -313,8 +313,18 @@ function messageBody(m) {
   return `
     ${m.urgent ? `<p class="urgent-flag">Urgent${m.urgencyReason ? ` · ${esc(m.urgencyReason)}` : ''}</p>` : ''}
     <p class="triage-contact">${esc(m.sender || 'Expéditeur inconnu')}</p>
+    ${phoneLine(m)}
     ${m.subject ? `<p class="muted">${esc(m.subject)}</p>` : ''}
     <p class="triage-text">${esc(m.summary || '—')}</p>`;
+}
+
+// Numéro d'un appel : un appui lance l'appel depuis le téléphone, ou le copie sur ordinateur.
+function phoneLine(m) {
+  if (!m.phone) return '';
+  const tel = m.phone.replace(/[^\d+]/g, '');
+  return `<p class="phone-line"><span class="phone" id="tel-${m.id}">${esc(m.phone)}</span>
+      <a class="btn small-btn" href="tel:${esc(tel)}">Appeler</a>
+      <button type="button" class="btn small-btn ghost" data-action="copy-draft" data-target="tel-${m.id}" data-toast="Numéro copié.">Copier</button></p>`;
 }
 
 function draftHtml(m) {
@@ -328,11 +338,11 @@ function draftHtml(m) {
 }
 
 function messageCard(m, position, inSheet = false, next = null) {
-  const sourceLabel = m.source === 'whatsapp' ? 'WhatsApp' : 'Mail';
+
   return `
   <section class="${inSheet ? '' : 'card '}triage${m.urgent ? ' is-urgent' : ''}" aria-label="Message à trier">
     <div class="triage-meta">
-      <span class="chip src-${m.source}">${sourceLabel}</span>
+      ${sourceChip(m.source)}
       <span class="muted small">${m.receivedOn ? `reçu ${esc(agoLabel(m.receivedOn))}` : ''}${position ? ` · ${position}` : ''}</span>
     </div>
     ${messageBody(m)}
@@ -428,7 +438,7 @@ function historyCard(m, position = '', next = null) {
   return `
   <section class="triage" aria-label="Message déjà traité">
     <div class="triage-meta">
-      <span class="chip src-${m.source}">${m.source === 'whatsapp' ? 'WhatsApp' : 'Mail'}</span>
+      ${sourceChip(m.source)}
       <span class="chip">${m.status === 'task' ? 'tâche créée' : 'classé sans tâche'}</span>
       <span class="muted small">${m.receivedOn ? `reçu ${esc(agoLabel(m.receivedOn))}` : ''}${position ? ` · ${position}` : ''}</span>
     </div>

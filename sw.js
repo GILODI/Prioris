@@ -1,6 +1,6 @@
 // Version : à augmenter à chaque déploiement qui change l'application. La page la lit pour proposer
 // « Nouvelle version disponible » (js/update.js) ; elle sert aussi à purger les anciens caches.
-const CACHE = 'prioris-v17';
+const CACHE = 'prioris-v18';
 const ASSETS = [
   './', './index.html', './config.js', './manifest.json', './icon-192.png', './icon-512.png',
   './css/app.css', './js/app.js', './js/store.js', './js/parse.js', './js/dictation.js',

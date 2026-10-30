@@ -176,13 +176,17 @@ const actions = {
   'fm-next': () => focusModeNext(),
   'capture': el => openCapture(el.dataset.mode || 'task'),
   'capture-mode': el => {
-    const input = document.getElementById('capture-input');
-    const contact = document.getElementById('capture-contact');
-    const text = [contact ? contact.value.trim() : '', input ? input.value.trim() : ''].filter(Boolean).join(', ');
+    // Ce qui est déjà saisi suit le changement d'onglet (Tâche, Appel, Idée).
+    const val = id => { const x = document.getElementById(id); return x ? x.value.trim() : ''; };
+    const who = val('capture-contact') || val('call-name');
+    const what = val('capture-input') || val('call-content');
+    const mode = el.dataset.mode;
     stopDictation();
-    openCapture(el.dataset.mode);
-    const next = document.getElementById('capture-input');
-    if (next) { next.value = text; updateCapturePreview(); }
+    openCapture(mode);
+    const set = (id, v) => { const x = document.getElementById(id); if (x && v) x.value = v; };
+    if (mode === 'call') { set('call-name', who); set('call-content', what); }
+    else if (mode === 'task') { set('capture-contact', who); set('capture-input', what); updateCapturePreview(); }
+    else { set('capture-input', [who, what].filter(Boolean).join(', ')); }
   },
   'mic': el => {
     if (isListening()) { stopDictation(); return; }
@@ -322,6 +326,7 @@ const actions = {
     openRequestSheet({
       kind: 'sponsoring', source: m.source, sourceKey: m.sourceKey, inboxId: m.id, receivedOn: m.receivedOn,
       requester: m.sender, contactEmail: emailIn(m.sender), summary: m.summary, draft: m.draft, replyBy: m.due,
+      notes: m.phone ? `Tél. ${m.phone}` : '',
     }, true);
   },
   'request-task': el => {
@@ -445,6 +450,19 @@ document.addEventListener('submit', e => {
 
   if (form.dataset.form === 'login') {
     submitLogin(String(data.get('email') || '').trim().toLowerCase(), String(data.get('password') || ''));
+    return;
+  }
+
+  if (form.dataset.form === 'call') {
+    const name = String(data.get('name') || '').trim();
+    const content = String(data.get('content') || '').trim();
+    if (!name && !content) { toast('Indique au moins qui a appelé.'); return; }
+    store.createCall({
+      name: name || 'Appel', phone: String(data.get('phone') || '').trim(), content,
+      due: data.get('due') || null, urgent: data.get('urgent') === 'on',
+    });
+    closeSheet();
+    toast('Appel noté : il t\'attend dans « À trier ».', 'good');
     return;
   }
 

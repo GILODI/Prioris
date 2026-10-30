@@ -64,6 +64,7 @@ export function renderHome() {
   const mainMessages = q.main.filter(e => e.kind === 'msg').map(e => e.item);
   const mails = mainMessages.filter(m => m.source === 'mail').length;
   const whatsapp = mainMessages.filter(m => m.source === 'whatsapp').length;
+  const calls = mainMessages.filter(m => m.source === 'phone').length;
   const urgentCount = mainMessages.filter(m => m.urgent).length;
   const deadlines = open
     .filter(t => t.due && daysUntil(t.due) <= 7)
@@ -130,6 +131,7 @@ export function renderHome() {
       <div class="counts">
         <div><b>${mails}</b><span>mails</span></div>
         <div><b>${whatsapp}</b><span>WhatsApp</span></div>
+        <div><b>${calls}</b><span>appels</span></div>
         <div><b>${toSort.length}</b><span>tâches</span></div>
       </div>
       ${q.main.length ? `<button class="btn wide" data-action="go" data-view="inbox">Trier maintenant</button>` : '<p class="muted small">Rien à trier pour l\'instant.</p>'}
