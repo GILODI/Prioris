@@ -1,6 +1,6 @@
-// À trier : messages (mails, WhatsApp) et tâches sans catégorie.
+// À trier : messages (mails, WhatsApp, Instagram, appels) et tâches sans catégorie.
 // Deux façons de travailler : « Une à la fois » (pour trier sans se disperser) ou « Liste »
-// (pour naviguer et chercher dans tout). Filtre Tout / Mails / WhatsApp.
+// (pour naviguer et chercher dans tout). Filtre Tout / Mails / WhatsApp / Instagram / Appels.
 // Quatre files : À traiter (urgents + 7 derniers jours + tâches sans catégorie),
 // Plus anciens, Pour info, Historique (messages déjà traités).
 import { state, sortForZone, senderRule } from '../store.js';
@@ -146,7 +146,7 @@ export function renderInbox() {
     ['info', 'Pour info', q.info.length],
     ['history', 'Historique', state.inboxHistory ? q.history.length : '…'],
   ];
-  const sources = [['all', 'Tout'], ['mail', 'Mails'], ['whatsapp', 'WhatsApp'], ['phone', 'Appels']];
+  const sources = [['all', 'Tout'], ['mail', 'Mails'], ['whatsapp', 'WhatsApp'], ['instagram', 'Instagram'], ['phone', 'Appels']];
 
   let html = `
   <header class="page-head">

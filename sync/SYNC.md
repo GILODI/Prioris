@@ -3,7 +3,8 @@
 Procédure suivie par la tâche Claude « Synchroniser Prioris », lancée à la main par Alex
 depuis l'application Claude. Elle importe dans Prioris (écran « À trier ») les nouveaux mails
 et messages WhatsApp relevés dans les deux classeurs Excel du dossier OneDrive
-« Gestion des messageries ».
+« Gestion des messageries », ainsi que les messages privés Instagram de camp_france, lus
+directement dans Chrome (étape 2 bis).
 
 Dossier du projet : `C:\Users\communication\Documents\Claude\Artifacts\todolist-camp`
 
@@ -83,11 +84,54 @@ Produisent `sync\out\archived-senders.json` et `sync\out\action-senders.json` (n
 minuscules). Si une commande échoue parce que la fonction n'existe pas encore dans Supabase,
 continuer avec une liste vide et le signaler dans le compte rendu.
 
+### 2 bis. Relever les messages Instagram (camp_france)
+
+Les messages privés Instagram ne passent par aucun classeur : ils sont lus directement dans la
+messagerie du compte **camp_france**, avec Claude in Chrome (outils `mcp__claude-in-chrome__*`,
+connexion déjà ouverte dans le Chrome d'Alex). Ajouté le 30/10/2026 à la demande d'Alex.
+
+**Si Chrome ou l'extension ne répond pas**, ou si la page demande de se connecter : sauter cette
+étape, continuer avec les mails et WhatsApp, et le signaler dans le compte rendu. Ne jamais saisir
+d'identifiant ni de mot de passe.
+
+**Interdits absolus sur Instagram** : ne rien écrire, ne rien envoyer, ne réagir à aucun message,
+ne pas accepter ni refuser une demande de message, ne rien supprimer, ne rien archiver. Lecture seule.
+Ouvrir une conversation la marque « Vu » chez l'expéditeur : Alex l'a accepté.
+
+1. Ouvrir un nouvel onglet sur `https://www.instagram.com/direct/inbox/` (le refermer à la fin).
+2. Date de départ : la plus récente `received_on` des clés `instagram-…` de `existing-index.json`,
+   moins 1 jour. S'il n'y en a aucune (premier passage) : le **2026-10-01**.
+3. Parcourir les onglets **Principal**, **Général** et **Demandes**, en faisant défiler la liste
+   jusqu'aux conversations plus anciennes que la date de départ (la liste se charge en défilant).
+4. Ignorer une conversation dont le dernier message vient d'Alex (« Vous : … », « Vous avez
+   envoyé… ») : il y a déjà répondu. Ignorer aussi un simple « A aimé un message ».
+5. Ouvrir chacune des autres. Son identifiant est la fin de l'adresse
+   (`/direct/t/<identifiant>/`). Relever la date exacte du dernier message reçu (séparateurs de
+   date de la conversation) et lire les messages reçus depuis la date de départ. Pour une pièce
+   jointe (story, post, reel partagé, mention), décrire ce qui est visible : « partage une story
+   où il tague C.A.M.P. ». Ne pas inventer ce qu'une image sans texte veut dire.
+6. Clé : `instagram-<identifiant>-<AAAA-MM-JJ du dernier message reçu>`. Comme pour WhatsApp, un
+   nouveau message dans le fil change la clé et la conversation revient dans « À trier ». Si la
+   clé est déjà dans `existing-keys.json`, passer à la suivante sans rien relever.
+   Date exacte : les séparateurs de la conversation (« 7 oct 2026, 17:37 », « Mer 19:31 » = ce
+   mercredi-là, « 11:51 » = aujourd'hui), jamais la durée approximative de la liste (« 3 sem. »),
+   sinon la clé change d'un passage à l'autre et le fil serait réimporté.
+   Une simple mention en story (« A mentionné votre nom dans sa story ») ou une réaction donne une
+   fiche « pour info » (`needs_action` à `false`).
+   Constaté au premier passage (30/10/2026) : Instagram recharge parfois la page en cours de
+   lecture ; reprendre là où la lecture s'est arrêtée. L'onglet Demandes ne prévient pas
+   l'expéditeur tant que la demande n'est pas acceptée.
+7. Écrire les conversations relevées dans `sync\out\instagram.json`, au format de
+   `messages.json` : `source` = `instagram`, `source_key`, `received_on`, `sender` (nom affiché,
+   suivi de « (@identifiant) » s'il est visible), `subject` vide, `content` = l'échange depuis la
+   date de départ, en texte, et `excel_action`, `excel_status`, `excel_reply`, `excel_priority`
+   vides.
+
 ### 3. Retenir les nouveaux messages
 
-Garder les messages dont le `source_key` n'est pas dans `existing-keys.json` et dont
-`excel_status` n'est pas « Traité ». S'il n'y en a aucun, répondre « Rien de nouveau à
-importer » et s'arrêter.
+Garder les messages de `messages.json` dont le `source_key` n'est pas dans `existing-keys.json`
+et dont `excel_status` n'est pas « Traité », plus tous ceux de `instagram.json`. S'il n'y en a
+aucun, répondre « Rien de nouveau à importer » et s'arrêter.
 
 ### 4. Préparer chaque message
 
@@ -101,7 +145,7 @@ Pour chaque message retenu, produire un objet avec exactement ces champs :
 | `proposed_action` | Une action courte à l'infinitif (« Répondre à Emma sur la liste matériel »). Reprendre `excel_action` s'il est pertinent. Vide si `needs_action` est `false`. |
 | `proposed_priority` | 0 = vite fait (moins de 5 min : confirmer, transférer, répondre en deux lignes), 1 = urgent, 2 = cette semaine, 3 = file d'attente / plus tard, 4 = perso. `null` si `needs_action` est `false`. |
 | `proposed_due` | AAAA-MM-JJ seulement si le message cite une date limite explicite, sinon `null`. |
-| `draft_reply` | Si une réponse est attendue : reprendre `excel_reply` s'il existe, sinon rédiger une réponse courte, prête à envoyer, en français, ton professionnel parlé, signée « Alex ». Reprendre le tutoiement ou le vouvoiement de l'expéditeur. Pour WhatsApp, pas de formule d'en-tête. Ne jamais inventer d'engagement (date, prix, quantité) : écrire `[à compléter]` à la place. Vide si aucune réponse n'est attendue. |
+| `draft_reply` | Si une réponse est attendue : reprendre `excel_reply` s'il existe, sinon rédiger une réponse courte, prête à envoyer, en français, ton professionnel parlé, signée « Alex ». Reprendre le tutoiement ou le vouvoiement de l'expéditeur. Pour WhatsApp et Instagram, pas de formule d'en-tête. Ne jamais inventer d'engagement (date, prix, quantité) : écrire `[à compléter]` à la place. Vide si aucune réponse n'est attendue. |
 | `urgent` | `true` uniquement si `excel_status` contient « urgence » (marqué « à traiter en urgence » dans le suivi Excel). Sinon `false`. Règle volontairement stricte, choisie par Alex : trop d'urgents rendent le mot inutile. Ne pas marquer urgent pour une relance, un sujet ancien ou un expéditeur important. L'urgence liée à une échéance (dépassée ou dans les 2 jours) est calculée par l'application à partir de `proposed_due` : ne pas la reporter ici. |
 | `urgency_reason` | Si `urgent` : « marqué à traiter en urgence dans ton suivi », complété si utile par le motif en quelques mots. Sinon vide. |
 
@@ -117,6 +161,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\communication\Docu
 ```
 
 Un lot déjà envoyé n'est jamais renvoyé en double : la base ignore les `source_key` existants.
+
+Les messages Instagram partent dans des lots **à part**, après les mails et WhatsApp. Si leur
+envoi échoue sur la règle d'origine (`source_check`), c'est que `sql/2026-10-instagram.sql` n'a
+pas encore été exécuté dans Supabase : le signaler dans le compte rendu, sans s'arrêter.
 
 ### 6. Repérer les demandes (sponsoring, lots, visuels)
 
@@ -158,7 +206,7 @@ garder qu'**une**, sur le message le plus ancien, et mentionner la relance dans 
 | `kind` | `sponsoring`, `lots` ou `visuel` |
 | `source`, `source_key`, `received_on` | recopiés du message |
 | `requester` | la personne qui écrit (nom seul) |
-| `contact_email` | adresse mail de l'expéditeur si `sender` en contient une (en minuscules), sinon vide. Ne jamais en inventer une. Pour WhatsApp, vide |
+| `contact_email` | adresse mail de l'expéditeur si `sender` en contient une (en minuscules), sinon vide. Ne jamais en inventer une. Pour WhatsApp et Instagram, vide |
 | `organization` | la structure : club, magasin, organisateur ; pour un athlète seul, son nom. Toujours écrit de la même façon (« Au Vieux Campeur », pas « AVC »), pour que Prioris retrouve les demandes précédentes |
 | `event_name` | nom court de l'événement ou de la saison (« Contest de Dry Tooling », « Saison 2026 »), vide sinon |
 | `event_date` | AAAA-MM-JJ si la date de l'événement est citée, sinon `null`. Pour un événement sur plusieurs jours, le premier jour |
@@ -179,7 +227,7 @@ message dans « À trier ».
 
 ### 7. Rendre compte, en 9 lignes maximum
 
-- nombre de messages importés (mails / WhatsApp), et combien de mails `rapprochee` (déjà importés, résumés depuis) ;
+- nombre de messages importés (mails / WhatsApp / Instagram, ou « Instagram sauté » et pourquoi), et combien de mails `rapprochee` (déjà importés, résumés depuis) ;
 - nombre de demandes repérées (sponsoring / lots / visuels) ;
 - nombre de messages classés « pour info » parce qu'Alex a validé leur expéditeur ;
 - nombre d'urgents, et les 3 plus urgents en une ligne chacun (expéditeur : action) ;

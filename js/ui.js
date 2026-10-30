@@ -47,8 +47,8 @@ export function zoneChip(p) {
 
 // Une ligne de tâche. opts : handle (poignée de glisser), showZone (rappel de catégorie),
 // focusButton ('add' | 'remove').
-// Origine d'un message ou d'une tâche : mail, WhatsApp ou appel téléphonique.
-const SOURCE_LABELS = { mail: 'Mail', whatsapp: 'WhatsApp', phone: 'Appel' };
+// Origine d'un message ou d'une tâche : mail, WhatsApp, Instagram ou appel téléphonique.
+const SOURCE_LABELS = { mail: 'Mail', whatsapp: 'WhatsApp', instagram: 'Instagram', phone: 'Appel' };
 export function sourceLabel(s) { return SOURCE_LABELS[s] || ''; }
 export function sourceChip(s) { return SOURCE_LABELS[s] ? `<span class="chip src-${s}">${SOURCE_LABELS[s]}</span>` : ''; }
 
