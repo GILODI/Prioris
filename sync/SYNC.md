@@ -113,6 +113,14 @@ Ouvrir une conversation la marque « Vu » chez l'expéditeur : Alex l'a accept�
 6. Clé : `instagram-<identifiant>-<AAAA-MM-JJ du dernier message reçu>`. Comme pour WhatsApp, un
    nouveau message dans le fil change la clé et la conversation revient dans « À trier ». Si la
    clé est déjà dans `existing-keys.json`, passer à la suivante sans rien relever.
+   Date exacte : les séparateurs de la conversation (« 7 oct 2026, 17:37 », « Mer 19:31 » = ce
+   mercredi-là, « 11:51 » = aujourd'hui), jamais la durée approximative de la liste (« 3 sem. »),
+   sinon la clé change d'un passage à l'autre et le fil serait réimporté.
+   Une simple mention en story (« A mentionné votre nom dans sa story ») ou une réaction donne une
+   fiche « pour info » (`needs_action` à `false`).
+   Constaté au premier passage (30/10/2026) : Instagram recharge parfois la page en cours de
+   lecture ; reprendre là où la lecture s'est arrêtée. L'onglet Demandes ne prévient pas
+   l'expéditeur tant que la demande n'est pas acceptée.
 7. Écrire les conversations relevées dans `sync\out\instagram.json`, au format de
    `messages.json` : `source` = `instagram`, `source_key`, `received_on`, `sender` (nom affiché,
    suivi de « (@identifiant) » s'il est visible), `subject` vide, `content` = l'échange depuis la
