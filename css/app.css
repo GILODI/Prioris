@@ -194,6 +194,7 @@ h2 { font-size: 16.5px; margin: 0; }
 /* --- Messages à trier --- */
 .chip.src-mail { background: var(--accent-soft); color: var(--accent); }
 .chip.src-whatsapp { background: var(--green-soft); color: var(--green); }
+.chip.src-instagram { background: var(--violet-soft); color: var(--violet); }
 .chip.src-phone { background: var(--amber-soft); color: var(--amber); }
 .phone-line { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .phone-line .phone { font-weight: 700; font-variant-numeric: tabular-nums; user-select: all; }
